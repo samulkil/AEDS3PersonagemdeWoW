@@ -2,15 +2,22 @@ import struct
 import os
 
 class Conta:
-    # Formato: 1s (Lápide), i (ID), 20s (Usuário), 30s (Email), 10s (Data)
-    FORMATO = "1s i 20s 30s 10s" 
+    # Adicionado o prefixo '<' para garantir tamanho fixo padrão (65 bytes)
+    # 1s (1) + i (4) + 20s (20) + 30s (30) + 10s (10) = 65 bytes
+    FORMATO = "<1s i 20s 30s 10s" 
 
     def __init__(self, id, usuario, email, data, lapide=b' '):
         self.id = id
-        # Tratamento de strings para bytes com tamanho fixo
-        self.usuario = usuario.encode('utf-8')[:20] if isinstance(usuario, str) else usuario[:20]
-        self.email = email.encode('utf-8')[:30] if isinstance(email, str) else email[:30]
-        self.data = data.encode('utf-8')[:10] if isinstance(data, str) else data[:10]
+        if isinstance(usuario, str):
+            usuario = usuario.encode('utf-8')
+        if isinstance(email, str):
+            email = email.encode('utf-8')
+        if isinstance(data, str):
+            data = data.encode('utf-8')
+            
+        self.usuario = usuario[:20]
+        self.email = email[:30]
+        self.data = data[:10]
         self.lapide = lapide
 
     def to_bytes(self):      
@@ -21,6 +28,7 @@ class Conta:
     
     @classmethod 
     def from_bytes(cls, dados_binarios):
+        # Usando o prefixo '<' no unpack também
         lapide, id, usuario, email, data = struct.unpack(cls.FORMATO, dados_binarios)
         return cls(
             id, 
@@ -33,7 +41,7 @@ class Conta:
 class ArquivoConta:
     def __init__(self, nome_arquivo="contas.bin"):
         self.nome_arquivo = nome_arquivo
-        self.formato_header = "i" 
+        self.formato_header = "<i" # Padronizado com <
         self.tamanho_header = struct.calcsize(self.formato_header)
         self.tamanho_registro = struct.calcsize(Conta.FORMATO)
         
@@ -55,68 +63,73 @@ class ArquivoConta:
             f.write(struct.pack(self.formato_header, novo_id))
             print(f"Conta do usuário {novo_id} criada com sucesso!")
 
-    def update(self, id_alvo, novo_usuario, novo_email, nova_data):
-        """Atualiza os dados de uma conta existente (Fase 1)"""
-        with open(self.nome_arquivo, "rb+") as f: # r+ permite leitura e escrita
-            f.seek(self.tamanho_header) # Pula o ID de controle no início
-            
-            while True:
-                posicao_atual = f.tell() # Salva o início do registro para o seek
-                lapide = f.read(1)
-                
-                if not lapide:
-                    print("Conta não encontrada.")
-                    break
-
-                # Lê o restante do registro (ID + Usuario + Email + Data)
-                # O ponteiro avança durante a leitura para checar o ID
-                dados_restantes = f.read(self.tamanho_registro - 1)
-                id_lido = struct.unpack("i", dados_restantes[:4])[0]
-
-                # Se for o ID buscado e a conta estiver ativa (lápide vazia)
-                if id_lido == id_alvo and lapide == b' ':
-                    f.seek(posicao_atual) # Volta para o byte exato onde o registro começa
-                    
-                    # Cria o objeto com os novos dados fornecidos
-                    conta_atualizada = Conta(id_alvo, novo_usuario, novo_email, nova_data)
-                    
-                    # Sobrescreve os bytes antigos com os novos
-                    f.write(conta_atualizada.to_bytes())
-                    print(f"Conta {id_alvo} atualizada com sucesso!")
-                    return True
-        return False
-
     def read(self, id_alvo):
         with open(self.nome_arquivo, "rb") as f:
             f.seek(self.tamanho_header)
             while True:
                 posicao_atual = f.tell()
                 lapide = f.read(1)
-                if not lapide:
-                    break
+                if not lapide: break
                 
                 dados = f.read(self.tamanho_registro - 1)
-                id_lido = struct.unpack("i", dados[:4])[0]
+                # IMPORTANTE: Adicionado '<' no unpack do ID para bater com a gravação
+                id_lido = struct.unpack("<i", dados[:4])[0]
 
                 if id_lido == id_alvo and lapide == b' ':
                     f.seek(posicao_atual)
                     return Conta.from_bytes(f.read(self.tamanho_registro))
         return None
 
+    def read_por_usuario(self, nome_usuario):
+        with open(self.nome_arquivo, "rb") as f:
+            f.seek(self.tamanho_header)
+            while True:
+                posicao_atual = f.tell()
+                lapide = f.read(1)
+                if not lapide: break
+                
+                dados = f.read(self.tamanho_registro - 1)
+                # Desempacota o usuário (está após o ID de 4 bytes)
+                usuario_lido = struct.unpack("<20s", dados[4:24])[0]
+                usuario_limpo = usuario_lido.decode('utf-8').strip('\x00')
+
+                if usuario_limpo == nome_usuario and lapide == b' ':
+                    f.seek(posicao_atual)
+                    return Conta.from_bytes(f.read(self.tamanho_registro))
+        return None
+
+    def update(self, id_alvo, novo_usuario, novo_email, nova_data):
+        with open(self.nome_arquivo, "rb+") as f:
+            f.seek(self.tamanho_header)
+            while True:
+                posicao_atual = f.tell()
+                lapide = f.read(1)
+                if not lapide: break
+
+                dados = f.read(self.tamanho_registro - 1)
+                id_lido = struct.unpack("<i", dados[:4])[0]
+
+                if id_lido == id_alvo and lapide == b' ':
+                    f.seek(posicao_atual)
+                    conta_up = Conta(id_alvo, novo_usuario, novo_email, nova_data)
+                    f.write(conta_up.to_bytes())
+                    print(f"Conta {id_alvo} atualizada!")
+                    return True
+        return False
+
     def delete(self, id_alvo):
         with open(self.nome_arquivo, "rb+") as f:
             f.seek(self.tamanho_header)
             while True:
-                posicao_da_lapide = f.tell()
+                pos_lapide = f.tell()
                 lapide = f.read(1)
-                if not lapide:
-                    break
+                if not lapide: break
                 
                 dados = f.read(self.tamanho_registro - 1)
-                id_lido = struct.unpack("i", dados[:4])[0]
+                id_lido = struct.unpack("<i", dados[:4])[0]
 
                 if lapide == b' ' and id_lido == id_alvo:
-                    f.seek(posicao_da_lapide)
-                    f.write(b'*') # Lápide de exclusão
+                    f.seek(pos_lapide)
+                    f.write(b'*')
                     return True
         return False
