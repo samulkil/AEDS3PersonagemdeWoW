@@ -1,4 +1,4 @@
-from CRUD import Personagem, ArquivoPerso
+from Personagem import Personagem, ArquivoPerso
 
 def menu():
     db = ArquivoPerso()
