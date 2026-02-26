@@ -1,17 +1,9 @@
-import sys
-import os
-
-# Adiciona as pastas model e dao ao caminho de busca do Python
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from model.Personagem import Personagem
-from model.Conta import Conta
-from dao.PersonagemDAO import PersonagemDAO
-from dao.ContaDAO import ContaDAO
+import struct
+from Personagem import Personagem, ArquivoPerso
+from Conta import Conta, ArquivoConta
 
 def menu_personagens(id_conta_logada, nome_usuario):
-    # Instancia o DAO de Personagem (Camada DAO)
-    dao_perso = PersonagemDAO()
+    db_perso = ArquivoPerso()
     
     while True:
         print(f"\n" + "="*40)
@@ -29,36 +21,34 @@ def menu_personagens(id_conta_logada, nome_usuario):
         if op == "1":
             nome = input("Nome do personagem: ")
             nivel = float(input("Nível inicial: "))
-            # Cria o Model e envia para o DAO persistir
+            # Cria o objeto passando o ID da conta logada como FK
             novo_p = Personagem(0, nome, nivel, id_conta_logada)
-            dao_perso.create(novo_p)
-            print(f"\n[Sucesso] Personagem criado!")
+            db_perso.create(novo_p)
 
         elif op == "2":
             try:
                 id_busca = int(input("Digite o ID do personagem: "))
-                p = dao_perso.read(id_busca)
-                # Verifica se o personagem existe e se pertence ao usuário logado
+                p = db_perso.read(id_busca)
                 if p and p.id_conta == id_conta_logada:
-                    print(f"\n[Dados] ID: {p.id} | Nome: {p.nome} | Nível: {p.nivel}")
+                    nome_str = p.nome.decode('utf-8').strip('\x00')
+                    print(f"\n[Sucesso] ID: {p.id} | Nome: {nome_str} | Nível: {p.nivel}")
                 else:
                     print("\n[Erro] Personagem não encontrado ou acesso negado.")
             except ValueError:
                 print("\n[Erro] Digite um ID numérico válido.")
 
         elif op == "3":
-            # O método listar_por_conta deve estar no seu PersonagemDAO
-            dao_perso.listar_por_conta(id_conta_logada)
+            # Lista apenas personagens vinculados a esta conta
+            db_perso.listar_por_conta(id_conta_logada)
 
         elif op == "4":
             try:
                 id_up = int(input("ID do personagem para atualizar: "))
-                p_check = dao_perso.read(id_up)
+                p_check = db_perso.read(id_up)
                 if p_check and p_check.id_conta == id_conta_logada:
                     novo_nome = input("Novo Nome: ")
                     novo_nivel = float(input("Novo Nível: "))
-                  #  p_atualizado = Personagem(id_up, novo_nome, novo_nivel, id_conta_logada)
-                    dao_perso.update(id_up, novo_nome, novo_nivel,id_conta_logada)
+                    db_perso.update(id_up, novo_nome, novo_nivel, id_conta_logada)
                 else:
                     print("\n[Erro] Personagem não encontrado nesta conta.")
             except ValueError:
@@ -67,12 +57,11 @@ def menu_personagens(id_conta_logada, nome_usuario):
         elif op == "5":
             try:
                 id_del = int(input("ID do personagem para excluir: "))
-                p_check = dao_perso.read(id_del)
+                p_check = db_perso.read(id_del)
                 if p_check and p_check.id_conta == id_conta_logada:
-                    dao_perso.delete(id_del)
-                    print("\n[Sucesso] Personagem excluído.")
+                    db_perso.delete(id_del)
                 else:
-                    print("\n[Erro] Acesso negado ou ID inexistente.")
+                    print("\n[Erro] Acesso negado.")
             except ValueError:
                 print("\n[Erro] ID inválido.")
 
@@ -81,8 +70,7 @@ def menu_personagens(id_conta_logada, nome_usuario):
             break
 
 def menu_contas():
-    # Instancia o DAO de Conta
-    dao_conta = ContaDAO()
+    db_conta = ArquivoConta()
     
     while True:
         print("\n" + "#"*40)
@@ -100,15 +88,14 @@ def menu_contas():
         if opcao == "1":
             u = input("Nome de Usuário: ")
             e = input("E-mail: ")
-            d = input("Data (DD/MM/AAAA): ")
+            d = input("Data de Criação (DD/MM/AAAA): ")
             nova_c = Conta(0, u, e, d)
-            dao_conta.create(nova_c)
-            print("\n[Sucesso] Conta cadastrada!")
+            db_conta.create(nova_c)
 
         elif opcao == "2":
             try:
                 id_c = int(input("Digite o ID da Conta: "))
-                c = dao_conta.read(id_c)
+                c = db_conta.read(id_c)
                 if c:
                     print(f"\n[Conta] Usuário: {c.usuario} | Email: {c.email} | Data: {c.data}")
                 else:
@@ -119,22 +106,17 @@ def menu_contas():
         elif opcao == "3":
             try:
                 id_c = int(input("ID da conta para atualizar: "))
-                c_antiga = dao_conta.read(id_c)
-                if c_antiga:
-                    u = input("Novo Usuário: ")
-                    e = input("Novo Email: ")
-                    d = input("Nova Data: ")
-                    c_nova = Conta(id_c, u, e, d)
-                    dao_conta.update(id_c, c_nova)
-                else:
-                    print("\n[Erro] Conta não encontrada.")
+                u = input("Novo Usuário: ")
+                e = input("Novo Email: ")
+                d = input("Nova Data: ")
+                db_conta.update(id_c, u, e, d)
             except ValueError:
                 print("\n[Erro] Entrada inválida.")
 
         elif opcao == "4":
             try:
                 id_c = int(input("ID da conta para deletar: "))
-                if dao_conta.delete(id_c):
+                if db_conta.delete(id_c):
                     print("\n[Sucesso] Conta desativada.")
                 else:
                     print("\n[Erro] Não foi possível deletar.")
@@ -142,9 +124,9 @@ def menu_contas():
                 print("\n[Erro] ID inválido.")
 
         elif opcao == "5":
-            user_login = input("Digite o NOME DE USUÁRIO: ")
-            # Chama o método que movemos para o DAO
-            conta = dao_conta.read_por_usuario(user_login)
+            user_login = input("Digite o NOME DE USUÁRIO para logar: ")
+            # Busca a conta pela string do usuário conforme você pediu
+            conta = db_conta.read_por_usuario(user_login)
             
             if conta:
                 menu_personagens(conta.id, conta.usuario)
@@ -154,6 +136,8 @@ def menu_contas():
         elif opcao == "6":
             print("Encerrando sistema...")
             break
+        else:
+            print("\n[!] Opção inválida, tente novamente.")
 
 if __name__ == "__main__":
     menu_contas()
