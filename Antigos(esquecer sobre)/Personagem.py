@@ -65,6 +65,24 @@ class ArquivoPerso:
                     return Personagem.from_bytes(f.read(self.tamanho_registro))
         return None
 
+    def read_por_nome(self, nome_perso):
+        with open(self.nome_arquivo, "rb") as f:
+            f.seek(self.tamanho_header)
+            while True:
+                posicao_atual = f.tell()
+                lapide = f.read(1)
+                if not lapide: break 
+
+                dados = f.read(self.tamanho_registro - 1)
+                nome_lido = struct.unpack("<20s", dados[4:24])[0]
+                nome_limpo = nome_lido.decode('utf-8').strip('\x00')
+                if nome_perso == nome_limpo and lapide == b' ':
+                    f.seek(posicao_atual)
+                    id_achado = struct.unpack("<i", dados[:4])[0]
+                    return id_achado
+        return None
+
+
     def update(self, id_alvo, novo_nome, novo_nivel, novo_id_conta):
         with open(self.nome_arquivo, "rb+") as f:
             f.seek(self.tamanho_header)
@@ -76,7 +94,7 @@ class ArquivoPerso:
                     break
 
                 dados = f.read(self.tamanho_registro - 1)
-                id_lido = struct.unpack("i", dados[:4])[0]
+                id_lido = struct.unpack("<i", dados[:4])[0]
 
                 if id_lido == id_alvo and lapide == b' ':
                     f.seek(posicao_atual)
@@ -96,7 +114,7 @@ class ArquivoPerso:
                     break
                 
                 dados = f.read(self.tamanho_registro - 1)
-                id_lido = struct.unpack("i", dados[:4])[0]
+                id_lido = struct.unpack("<i", dados[:4])[0]
 
                 if lapide == b' ' and id_lido == id_alvo:
                     f.seek(posicao_da_lapide)
