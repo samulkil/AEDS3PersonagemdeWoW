@@ -113,7 +113,6 @@ class ArquivoPerso:
             print("-" * 40)
             
             while True:
-                posicao_atual = f.tell()
                 lapide = f.read(1)
                 if not lapide:
                     break

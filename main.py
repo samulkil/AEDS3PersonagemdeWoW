@@ -21,7 +21,6 @@ def menu_personagens(id_conta_logada, nome_usuario):
         if op == "1":
             nome = input("Nome do personagem: ")
             nivel = float(input("Nível inicial: "))
-            # Cria o objeto passando o ID da conta logada como FK
             novo_p = Personagem(0, nome, nivel, id_conta_logada)
             db_perso.create(novo_p)
 
@@ -38,7 +37,7 @@ def menu_personagens(id_conta_logada, nome_usuario):
                 print("\n[Erro] Digite um ID numérico válido.")
 
         elif op == "3":
-            # Lista apenas personagens vinculados a esta conta
+            # Não esquece isso aq é a lista 
             db_perso.listar_por_conta(id_conta_logada)
 
         elif op == "4":
@@ -125,10 +124,12 @@ def menu_contas():
 
         elif opcao == "5":
             user_login = input("Digite o NOME DE USUÁRIO para logar: ")
-            # Busca a conta pela string do usuário conforme você pediu
+            # Busca a conta pela string do usuário 
             conta = db_conta.read_por_usuario(user_login)
             
             if conta:
+                #aqui ele já grava o ID/usuario da conta q ele pergou na linha 127 e p
+                # passa como parametro!!! 
                 menu_personagens(conta.id, conta.usuario)
             else:
                 print("\n[Erro] Usuário não encontrado ou desativado!")
