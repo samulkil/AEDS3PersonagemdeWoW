@@ -15,7 +15,7 @@ class ContaDAO:
                 f.write(struct.pack(self.header_fmt, 0))
                 
     def create(self, conta):
-        with open(self.arquivo, "rb+") as f: # Corrigido: self.arquivo
+        with open(self.arquivo, "rb+") as f: 
             f.seek(0)
             ultimo_id = struct.unpack(self.header_fmt, f.read(self.header_size))[0]
             novo_id = ultimo_id + 1
@@ -60,3 +60,42 @@ class ContaDAO:
                     f.seek(posicao_atual)
                     return Conta.from_bytes(f.read(self.reg_size))
         return None
+    
+    def update(self, id_alvo, conta_atualizada):
+        with open(self.arquivo, "rb+") as f:
+            f.seek(self.header_size)
+            while True:
+                posicao_atual = f.tell()
+                lapide = f.read(1)
+                if not lapide: break
+                
+                # Lemos o ID (4 bytes) para comparar
+                id_lido = struct.unpack("<i", f.read(4))[0]
+                
+                if id_lido == id_alvo and lapide == b' ':
+                    f.seek(posicao_atual)
+                    f.write(conta_atualizada.to_bytes())
+                    return True
+                
+                # Pula o restante do registro
+                f.seek(posicao_atual + self.reg_size)
+        return False
+    
+    def delete(self, id_alvo):
+        with open(self.arquivo, "rb+") as f:
+            f.seek(self.header_size)
+            while True:
+                posicao_atual = f.tell()
+                lapide = f.read(1)
+                if not lapide: break
+                
+                id_lido = struct.unpack("<i", f.read(4))[0]
+                
+                if id_lido == id_alvo and lapide == b' ':
+                    f.seek(posicao_atual)
+                    f.write(b'*') 
+                    print(f"Conta ID {id_alvo} excluída com sucesso!")
+                    return True
+                
+                f.seek(posicao_atual + self.reg_size)
+        return False

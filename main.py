@@ -1,7 +1,6 @@
 import sys
 import os
 
-# Adiciona as pastas model e dao ao caminho de busca do Python
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from model.Personagem import Personagem
@@ -10,7 +9,7 @@ from dao.PersonagemDAO import PersonagemDAO
 from dao.ContaDAO import ContaDAO
 
 def menu_personagens(id_conta_logada, nome_usuario):
-    # Instancia o DAO de Personagem (Camada DAO)
+
     dao_perso = PersonagemDAO()
     
     while True:
@@ -29,7 +28,6 @@ def menu_personagens(id_conta_logada, nome_usuario):
         if op == "1":
             nome = input("Nome do personagem: ")
             nivel = float(input("Nível inicial: "))
-            # Cria o Model e envia para o DAO persistir
             novo_p = Personagem(0, nome, nivel, id_conta_logada)
             dao_perso.create(novo_p)
             print(f"\n[Sucesso] Personagem criado!")
@@ -38,7 +36,6 @@ def menu_personagens(id_conta_logada, nome_usuario):
             try:
                 id_busca = int(input("Digite o ID do personagem: "))
                 p = dao_perso.read(id_busca)
-                # Verifica se o personagem existe e se pertence ao usuário logado
                 if p and p.id_conta == id_conta_logada:
                     print(f"\n[Dados] ID: {p.id} | Nome: {p.nome} | Nível: {p.nivel}")
                 else:
@@ -47,7 +44,6 @@ def menu_personagens(id_conta_logada, nome_usuario):
                 print("\n[Erro] Digite um ID numérico válido.")
 
         elif op == "3":
-            # O método listar_por_conta deve estar no seu PersonagemDAO
             dao_perso.listar_por_conta(id_conta_logada)
 
         elif op == "4":
@@ -57,7 +53,6 @@ def menu_personagens(id_conta_logada, nome_usuario):
                 if p_check and p_check.id_conta == id_conta_logada:
                     novo_nome = input("Novo Nome: ")
                     novo_nivel = float(input("Novo Nível: "))
-                  #  p_atualizado = Personagem(id_up, novo_nome, novo_nivel, id_conta_logada)
                     dao_perso.update(id_up, novo_nome, novo_nivel,id_conta_logada)
                 else:
                     print("\n[Erro] Personagem não encontrado nesta conta.")
@@ -81,7 +76,6 @@ def menu_personagens(id_conta_logada, nome_usuario):
             break
 
 def menu_contas():
-    # Instancia o DAO de Conta
     dao_conta = ContaDAO()
     
     while True:
@@ -143,7 +137,6 @@ def menu_contas():
 
         elif opcao == "5":
             user_login = input("Digite o NOME DE USUÁRIO: ")
-            # Chama o método que movemos para o DAO
             conta = dao_conta.read_por_usuario(user_login)
             
             if conta:
