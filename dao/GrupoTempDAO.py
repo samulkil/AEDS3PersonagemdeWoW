@@ -1,63 +1,47 @@
-import os
-import struct
-from model.GrupoTemp import GrupoTemp
-
 class GrupoTempDAO:
-    def __init__(self, nome_arquivo="grupos_temp.bin"):
-        self.nome_arquivo = nome_arquivo
-        self.formato_header = "<i" 
-        self.tamanho_header = struct.calcsize(self.formato_header)
-        self.tamanho_registro = struct.calcsize(GrupoTemp.FORMATO)
+    def __init__(self):
+        # Armazena os IDs dos grupos já inicializados nesta sessão
+        self.grupos_criados = [] 
+        # Armazena os objetos GrupoTemp (membros)
+        self.membros = []
+
+    def criar_grupo_automatico(self, id_conta, id_personagem):
+        """Cria um novo grupo com ID sequencial e já insere o criador"""
+        # O novo ID é o próximo da sequência nesta sessão
+        novo_id_grupo = len(self.grupos_criados) + 1
+        self.grupos_criados.append(novo_id_grupo)
         
-        if not os.path.exists(self.nome_arquivo):
-            with open(self.nome_arquivo, "wb") as f:
-                f.write(struct.pack(self.formato_header, 0))
-
-    def adicionarGrupo(self, id_grupo, id_conta, id_perso):
-        with open(self.nome_arquivo, "rb+") as f:
-            f.seek(self.tamanho_header)
-
-            # Primeiro percorre o arquivo todo procurando duplicatas
-            while True:
-                lapide = f.read(1)
-                if not lapide:
-                    break # Chegou ao fim do arquivo sem achar erro, sai do loop
-                
-                dados = f.read(self.tamanho_registro - 1)
-                id_g_lido, id_c_lido, id_p_lido = struct.unpack("<i i i", dados)
-
-                if lapide == b' ' and id_c_lido == id_conta and id_grupo == id_g_lido:
-                    print(f"\n[ERRO] A conta {id_conta} já possui um personagem (ID: {id_p_lido}) neste grupo!")
-                    return False 
-
-            f.seek(0, 2)
-            novo_membro = GrupoTemp(id_grupo, id_conta, id_perso)
-            f.write(novo_membro.to_bytes()) 
-            print(f"\n[SUCESSO] Personagem {id_perso} adicionado ao Grupo {id_grupo}.")
-            return True
-
-    def remover_do_grupo_por_nome(self, id_grupo, nome_personagem, arquivo_personagem):
-        id_p = arquivo_personagem.read_por_nome(nome_personagem)
+        # Como o grupo é novo, não precisamos validar limite ou conta repetida aqui
+        from model.GrupoTemp import GrupoTemp
+        primeiro_membro = GrupoTemp(novo_id_grupo, id_conta, id_personagem)
+        self.membros.append(primeiro_membro)
         
-        if id_p is None:
-            print(f"Personagem '{nome_personagem}' não encontrado.")
+        print(f"\n[SUCESSO] Grupo {novo_id_grupo} criado!")
+        print(f"Personagem {id_personagem} adicionado como líder do grupo.")
+        return novo_id_grupo
+
+    def adicionar_ao_grupo(self, id_grupo, id_conta, id_personagem):
+        """Adiciona membros a grupos JÁ EXISTENTES (via convite)"""
+        if id_grupo not in self.grupos_criados:
+            print(f"[ERRO] O Grupo {id_grupo} não existe nesta sessão.")
             return False
 
-        with open(self.nome_arquivo, "rb+") as f:
-            f.seek(self.tamanho_header)
-            while True:
-                pos_lapide = f.tell()
-                lapide = f.read(1)
-                if not lapide: break
-                
-                dados = f.read(self.tamanho_registro - 1)
-                id_g_lido, id_c_lido, id_p_lido = struct.unpack("<i i i", dados)
+        # Filtra membros do grupo alvo
+        membros_atuais = [m for m in self.membros if m.id_grupo == id_grupo]
 
-                if lapide == b' ' and id_g_lido == id_grupo and id_p_lido == id_p:
-                    f.seek(pos_lapide)
-                    f.write(b'*') # Exclusão Lógica
-                    print(f"Personagem '{nome_personagem}' (ID: {id_p}) removido do grupo {id_grupo}.")
-                    return True
-        
-        print(f"Personagem '{nome_personagem}' não está neste grupo.")
-        return False
+        if len(membros_atuais) >= 5:
+            print(f"[ERRO] Grupo {id_grupo} lotado (5/5).")
+            return False
+
+        for m in membros_atuais:
+            if m.id_conta == id_conta:
+                print(f"[ERRO] Você já tem um personagem neste grupo!")
+                return False
+
+        from model.GrupoTemp import GrupoTemp
+        self.membros.append(GrupoTemp(id_grupo, id_conta, id_personagem))
+        print(f"[SUCESSO] Personagem {id_personagem} entrou no Grupo {id_grupo}.")
+        return True
+
+    def listar_membros_do_grupo(self, id_grupo_alvo):
+        return [m for m in self.membros if m.id_grupo == id_grupo_alvo]
