@@ -2,6 +2,7 @@ import struct
 import os
 from model.Conta import Conta
 from controller.HashExtensivel import HashExtensivel
+from controller.ArvoreBPlus import ArvoreBPlus
 
 class ContaDAO:
     def __init__(self, arquivo="dados/contas.bin"):
@@ -10,6 +11,7 @@ class ContaDAO:
         self.header_size = struct.calcsize(self.header_fmt)
         self.reg_size = struct.calcsize(Conta.FORMATO)
         self.hash = HashExtensivel("dados/index_contas")
+        self.bplus = ArvoreBPlus("dados/index_contas")
         
         if not os.path.exists(self.arquivo):
             os.makedirs(os.path.dirname(self.arquivo), exist_ok=True)
@@ -27,6 +29,7 @@ class ContaDAO:
             pos = f.tell()
             f.write(conta.to_bytes())
             self.hash.insert(novo_id, pos)
+            self.bplus.inserir(novo_id, pos)
 
             f.seek(0)
             f.write(struct.pack(self.header_fmt, novo_id))
