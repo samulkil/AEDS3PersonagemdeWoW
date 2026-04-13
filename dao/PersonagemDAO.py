@@ -1,6 +1,7 @@
 import os
 import struct
 from model.Personagem import Personagem
+from model.ArvoreBPlus import ArvoreBPlus
 
 class PersonagemDAO:
     def __init__(self, arquivo="dados/personagens.bin"):
@@ -8,6 +9,11 @@ class PersonagemDAO:
         self.header_fmt = "<i"
         self.header_size = struct.calcsize(self.header_fmt)
         self.reg_size = struct.calcsize(Personagem.FORMATO)
+        
+        self.arvore_id = ArvoreBPlus("dados/index_id.bin", ordem=4)
+        self.arvore_nivel = ArvoreBPlus("dados/index_nivel.bin", ordem=4)
+        self.reconstruir_indice()
+        
         
         if not os.path.exists(self.arquivo):
             os.makedirs(os.path.dirname(self.arquivo), exist_ok=True)
@@ -22,12 +28,22 @@ class PersonagemDAO:
             personagem.id = novo_id
             
             f.seek(0, 2)
+            pos = f.tell()  
+
             f.write(personagem.to_bytes())
+
+            # índice por ID
+            self.arvore_id.inserir(novo_id, pos)
+
+            # índice por nível 
+            nivel_int = int(personagem.nivel)
+            self.arvore_nivel.inserir(nivel_int, pos)
 
             f.seek(0)
             f.write(struct.pack(self.header_fmt, novo_id))
-            print(f"Personagem {novo_id} criado!")
 
+        print(f"Personagem {novo_id} criado!")
+        
     def read(self, id_alvo):
         with open(self.arquivo, "rb") as f:
             f.seek(self.header_size)
@@ -43,6 +59,24 @@ class PersonagemDAO:
                     f.seek(posicao_atual)
                     return Personagem.from_bytes(f.read(self.reg_size))
         return None
+    
+    #leitura da B+
+    def read_bplus(self, id_alvo):
+        pos = self.arvore.buscar(id_alvo)
+
+        if pos is None:
+            return None
+
+        with open(self.arquivo, "rb") as f:
+            f.seek(pos)
+            dados = f.read(self.reg_size)
+
+            lapide = dados[0:1]
+
+            if lapide != b' ':
+                return None
+
+            return Personagem.from_bytes(dados)
 
     def listar_por_conta(self, id_conta_alvo):
         encontrou = False
@@ -99,3 +133,46 @@ class PersonagemDAO:
                     print(f"Personagem {id_alvo} atualizado com sucesso!")
                     return True 
         return False
+    
+    def buscar_por_nivel(self, nivel):
+        posicoes = self.arvore_nivel.buscar_todos(int(nivel))
+
+        personagens = []
+
+        with open(self.arquivo, "rb") as f:
+            for pos in posicoes:
+                f.seek(pos)
+                dados = f.read(self.reg_size)
+
+                if dados[0:1] == b' ':
+                    personagens.append(Personagem.from_bytes(dados))
+
+        return personagens
+    
+    #Sempre roda, mas o melhor e rodar uma vez para sincronizar a arvore com os dados antigos 
+    def reconstruir_indice(self):
+        print("Reconstruindo índice B+...")
+
+        # apaga índice antigo
+        if os.path.exists("dados/index_personagem.bin"):
+            os.remove("dados/index_personagem.bin")
+
+        self.arvore = ArvoreBPlus("dados/index_personagem.bin", ordem=4)
+
+        with open(self.arquivo, "rb") as f:
+            f.seek(self.header_size)
+
+            while True:
+                pos = f.tell()
+                dados = f.read(self.reg_size)
+
+                if not dados:
+                    break
+
+                lapide = dados[0:1]
+                id_lido = struct.unpack("<i", dados[1:5])[0]
+
+                if lapide == b' ':
+                    self.arvore.inserir(id_lido, pos)
+
+        print("Índice reconstruído com sucesso!")

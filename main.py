@@ -103,6 +103,20 @@ def menu_personagens(id_conta_logada, nome_usuario):
                     print("\n[Erro] Personagem não encontrado ou acesso negado.")
             except ValueError:
                 print("\n[Erro] ID inválido.")
+                
+        elif op == "4":
+            try:
+                nivel = float(input("Digite o nível: "))
+                lista = dao_perso.buscar_por_nivel(nivel)
+
+                if lista:
+                    print("\n--- Personagens encontrados ---")
+                    for p in lista:
+                        print(f"ID: {p.id} | Nome: {p.nome} | Nível: {p.nivel}")
+                else:
+                    print("\nNenhum personagem encontrado.")
+            except ValueError:
+                print("\n[Erro] Entrada inválida.")
 
         elif op == "5":
             dao_perso.listar_por_conta(id_conta_logada)
