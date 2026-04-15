@@ -24,7 +24,7 @@ class ContaDAO:
             conta.id = novo_id
             
             f.seek(0, 2)
-            pos = f.tell(0)
+            pos = f.tell()
             f.write(conta.to_bytes())
             self.hash.insert(novo_id, pos)
 
@@ -65,20 +65,12 @@ class ContaDAO:
     
     def update(self, id_alvo, conta_atualizada):
         pos = self.hash.search(id_alvo)
-        if pos != None:
+        if pos is not None: # Verifica se a posição foi encontrada
             with open(self.arquivo, "rb+") as f:
-                posicao_atual = f.tell()
-                lapide = f.read(1)
-                if not lapide:
-                    return False
-                # Lemos o ID (4 bytes) para comparar
-                id_lido = struct.unpack("<i", f.read(4))[0]   
-                if id_lido == id_alvo and lapide == b' ':
-                    f.seek(posicao_atual)
-                    f.write(conta_atualizada.to_bytes())
-                    return True
-                # Pula o restante do registro
-                f.seek(posicao_atual + self.reg_size)
+                f.seek(pos) # VAI PARA A POSIÇÃO CORRETA INDICADA PELO HASH
+                # Escreve os novos bytes da conta diretamente por cima dos antigos
+                f.write(conta_atualizada.to_bytes())
+                return True
         return False
     
     def delete(self, id_alvo):
@@ -93,76 +85,76 @@ class ContaDAO:
 
     import os
 
-def ordenar_externo_usuario(self):
+    def ordenar_externo_usuario(self):
     # Configurações: Tamanho do bloco (ex: 3 registros por vez)
-    TAM_BLOCO = 3
-    runs = []
+        TAM_BLOCO = 3
+        runs = []
     
-    # --- ETAPA 1: DISTRIBUIÇÃO (Criação dos Runs) ---
-    with open(self.arquivo, "rb") as f:
-        f.seek(self.header_size)
-        contador_run = 0
+        # --- ETAPA 1: DISTRIBUIÇÃO (Criação dos Runs) ---
+        with open(self.arquivo, "rb") as f:
+            f.seek(self.header_size)
+            contador_run = 0
         
-        while True:
-            bloco = []
-            for _ in range(TAM_BLOCO):
-                dados = f.read(self.reg_size)
-                if not dados: break
-                c = Conta.from_bytes(dados)
-                if c.lapide == b' ': # Apenas registros ativos
-                    bloco.append(c)
+            while True:
+                bloco = []
+                for _ in range(TAM_BLOCO):
+                    dados = f.read(self.reg_size)
+                    if not dados: break
+                    c = Conta.from_bytes(dados)
+                    if c.lapide == b' ': # Apenas registros ativos
+                        bloco.append(c)
             
-            if not bloco: break
+                if not bloco: break
             
-            # Ordena o bloco na RAM
-            bloco.sort(key=lambda x: x.usuario.decode('utf-8').strip('\x00').lower())
+                # Ordena o bloco na RAM
+                bloco.sort(key=lambda x: x.usuario.decode('utf-8').strip('\x00').lower())
             
-            # Grava o Run em disco
-            nome_run = f"dados/run_{contador_run}.bin"
-            with open(nome_run, "wb") as f_run:
-                for c in bloco:
-                    f_run.write(c.to_bytes())
+                # Grava o Run em disco
+                nome_run = f"dados/run_{contador_run}.bin"
+                with open(nome_run, "wb") as f_run:
+                    for c in bloco:
+                        f_run.write(c.to_bytes())
             
-            runs.append(nome_run)
-            contador_run += 1
+                runs.append(nome_run)
+                contador_run += 1
 
-    # --- ETAPA 2: INTERCALAÇÃO (Merge) ---
-    if not runs: return
+        # --- ETAPA 2: INTERCALAÇÃO (Merge) ---
+        if not runs: return
     
-    arquivo_final = "dados/contas_ordenadas.bin"
-    # Abre todos os runs simultaneamente
-    fps = [open(r, "rb") for r in runs]
+        arquivo_final = "dados/contas_ordenadas.bin"
+        # Abre todos os runs simultaneamente
+        fps = [open(r, "rb") for r in runs]
     
-    with open(arquivo_final, "wb") as f_out:
-        # Lista para manter o registro atual de cada run
-        buffer = []
-        for fp in fps:
-            dados = fp.read(self.reg_size)
-            if dados:
-                buffer.append(Conta.from_bytes(dados))
-            else:
-                buffer.append(None)
+        with open(arquivo_final, "wb") as f_out:
+            # Lista para manter o registro atual de cada run
+            buffer = []
+            for fp in fps:
+                dados = fp.read(self.reg_size)
+                if dados:
+                    buffer.append(Conta.from_bytes(dados))
+                else:
+                    buffer.append(None)
 
-        while any(c is not None for c in buffer):
-            # Encontra o menor usuário entre os buffers ativos
-            menor_idx = -1
-            for i, c in enumerate(buffer):
-                if c is not None:
-                    if menor_idx == -1 or c.usuario < buffer[menor_idx].usuario:
-                        menor_idx = i
+            while any(c is not None for c in buffer):
+                # Encontra o menor usuário entre os buffers ativos
+                menor_idx = -1
+                for i, c in enumerate(buffer):
+                    if c is not None:
+                        if menor_idx == -1 or c.usuario < buffer[menor_idx].usuario:
+                            menor_idx = i
             
-            # Escreve o menor no arquivo final
-            f_out.write(buffer[menor_idx].to_bytes())
+                # Escreve o menor no arquivo final
+                f_out.write(buffer[menor_idx].to_bytes())
             
-            # Repõe o buffer do run que foi usado
-            proximo_dados = fps[menor_idx].read(self.reg_size)
-            if proximo_dados:
-                buffer[menor_idx] = Conta.from_bytes(proximo_dados)
-            else:
-                buffer[menor_idx] = None
+                # Repõe o buffer do run que foi usado
+                proximo_dados = fps[menor_idx].read(self.reg_size)
+                if proximo_dados:
+                    buffer[menor_idx] = Conta.from_bytes(proximo_dados)
+                else:
+                    buffer[menor_idx] = None
 
-    # Fecha e limpa os arquivos temporários
-    for fp in fps: fp.close()
-    for r in runs: os.remove(r)
+        # Fecha e limpa os arquivos temporários
+        for fp in fps: fp.close()
+        for r in runs: os.remove(r)
     
-    print(f"\n[SUCESSO] Arquivo '{arquivo_final}' gerado com sucesso!")
+        print(f"\n[SUCESSO] Arquivo '{arquivo_final}' gerado com sucesso!")
