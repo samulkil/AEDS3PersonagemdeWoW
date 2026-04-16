@@ -1,0 +1,39 @@
+{% extends "base_wow.html" %}
+
+{% block title %}Meus Personagens - {{usuario}}{% endblock %}
+
+{% block content %}
+<h1 class="wow-title">Personagens de {{usuario}}</h1>
+
+<div class="wow-nav">
+    <a href="/criar_personagem" class="wow-btn wow-btn-success"> Invocar Novo Herói</a>
+    <a href="/" class="wow-btn"> Salão Principal</a>
+    <a href="/config_conta" class="wow-btn"> Configurações</a>
+    <a href="/logout" class="wow-btn wow-btn-danger"> Abandonar Reino</a>
+</div>
+
+<div class="wow-card">
+    <div class="wow-card-title"> Seus Heróis</div>
+    
+    {% if personagens %}
+    <table class="wow-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome do Herói</th>
+                <th>Nível de Poder</th>
+                <th>Função</th>
+                <th>Comandos</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{personagens|safe}}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: #8b7355; padding: 40px;">
+        
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

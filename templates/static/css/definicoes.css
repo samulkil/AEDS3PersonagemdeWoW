@@ -1,0 +1,13 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Press+Start+2P&display=swap');
+
+:root {
+    --doom-black: #080707;
+    --doom-red: #9f2a1b;
+    --doom-red-strong: #cf4128;
+    --wow-gold: #c9a84c;
+    --wow-gold-soft: #f1d188;
+    --panel-dark: #131014;
+    --panel-mid: #231c25;
+    --panel-light: #332637;
+    --ink: #f2e3c2;
+}
