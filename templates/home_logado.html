@@ -1,0 +1,19 @@
+{% extends "base_wow.html" %}
+
+{% block title %}Salão do Herói - {{usuario}}{% endblock %}
+
+{% block content %}
+<h1 class="wow-title">Salão do Herói</h1>
+
+<div class="wow-hero">
+    <div class="wow-subtitle"> Bem-vindo de volta, <strong>{{usuario}}</strong>!</div>
+    <p class="wow-note">As terras de Azeroth aguardam sua próxima jornada.</p>
+
+    <div class="wow-actions">
+        <a href="/personagens" class="wow-btn wow-btn-success"> Meus Personagens</a>
+        <a href="/criar_personagem" class="wow-btn"> Criar Novo Herói</a>
+        <a href="/config_conta" class="wow-btn">Configurações</a>
+        <a href="/logout" class="wow-btn wow-btn-danger">Logout</a>
+    </div>
+</div>
+{% endblock %}

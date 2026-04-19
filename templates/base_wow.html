@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="preload" as="image" href="/imagens/WoW2.webp">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}World of RPGcraft{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/componentes.css"> 
+    <link rel="stylesheet" href="/static/css/layouts.css">
+    <link rel="stylesheet" href="/static/css/definicoes.css">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="wow-bg" id="wow-bg">
+     
+        <div class="wow-bg-slide active" ></div>
+    
+    </div>
+
+    <header class="wow-hud">
+        <div class="wow-hud-inner">
+            <div class="wow-hud-brand">WORLD OF RPGCRAFT</div>
+            <div class="wow-hud-status">Realm Online | Legacy Interface v1.0</div>
+            
+        </div>
+    </header>
+
+    <div class="wow-container">
+        <div class="wow-bg-leather"></div>
+        <div class="wow-bg-tint"></div>
+        {% block content %}{% endblock %}
+        
+    </div>
+    
+   
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

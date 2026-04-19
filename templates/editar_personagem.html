@@ -1,0 +1,41 @@
+{% extends "base_wow.html" %}
+
+{% block title %}Forja do Herói - {{usuario}}{% endblock %}
+
+{% block content %}
+<h1 class="wow-title"> Forja do Herói</h1>
+
+<div style="max-width: 620px; margin: 30px auto;">
+    <div class="wow-card wow-card-highlight">
+        <div class="wow-card-title"> Ajustar atributos de {{nome}}</div>
+
+        <form method="POST" action="/atualizar_personagem">
+            <input type="hidden" name="id" value="{{id}}">
+
+            <div class="wow-form-group">
+                <label class="wow-label">Nome do Personagem</label>
+                <input name="nome" class="wow-input" value="{{nome}}" required maxlength="20">
+            </div>
+
+            <div class="wow-form-group">
+                <label class="wow-label">Nível</label>
+                <input name="nivel" class="wow-input" type="number" value="{{nivel}}" step="0.1" min="1.0" max="100.0">
+            </div>
+
+            <div class="wow-form-group">
+                <label class="wow-label">Função</label>
+                <select name="funcao" class="wow-input" required>
+                    <option value="dano" {{selected_dano}}>Dano</option>
+                    <option value="tanque" {{selected_tanque}}>Tanque</option>
+                    <option value="suporte" {{selected_suporte}}>Suporte</option>
+                </select>
+            </div>
+
+            <div class="wow-actions" style="justify-content: flex-start;">
+                <button type="submit" class="wow-btn wow-btn-success"> Salvar Alterações</button>
+                <a href="/personagens" class="wow-btn"> Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,95 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Cinzel', serif;
+    background: #130709;
+    min-height: 100vh;
+    color: var(--ink);
+    position: relative;
+    overflow-x: hidden;
+    line-height: 1.45;
+}
+
+/* Scanlines / CRT retrô */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.03) 0,
+        rgba(255, 255, 255, 0.03) 1px,
+        rgba(0, 0, 0, 0) 2px,
+        rgba(0, 0, 0, 0) 4px
+    );
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0.22;
+}
+
+/* Vinheta para sensação de jogo antigo */
+body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle, transparent 45%, rgba(0, 0, 0, 0.7) 100%);
+    pointer-events: none;
+    z-index: 2;
+}
+
+.wow-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.wow-bg-slide {
+    background-image: url('/imagens/WoW2.webp');
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0;
+    transform: scale(1.02);
+    transition: opacity 2.2s ease-in-out, transform 8s ease;
+    filter: saturate(0.85) contrast(1.05) brightness(0.5);
+}
+
+.wow-bg-slide.active {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.wow-bg-tint {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(48, 22, 19, 0.6) 0%, rgba(54, 9, 5, 0.45) 25%);
+}
+
+.wow-bg-leather {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 30% 30%, rgba(255, 190, 130, 0.05) 0, transparent 18%),
+        radial-gradient(circle at 70% 55%, rgba(255, 170, 110, 0.04) 0, transparent 17%),
+        radial-gradient(circle at 45% 80%, rgba(255, 150, 90, 0.03) 0, transparent 16%),
+        repeating-linear-gradient(135deg, rgba(255, 180, 120, 0.02) 0, rgba(255, 180, 120, 0.02) 2px, rgba(0, 0, 0, 0) 3px, rgba(0, 0, 0, 0) 7px),
+        repeating-linear-gradient(45deg, rgba(35, 8, 9, 0.22) 0, rgba(35, 8, 9, 0.22) 6px, rgba(0, 0, 0, 0) 7px, rgba(0, 0, 0, 0) 12px);
+    mix-blend-mode: soft-light;
+    opacity: 0.95;
+}
+
+@keyframes wowPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.wow-loading {
+    animation: wowPulse 2s infinite;
+}
