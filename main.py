@@ -11,11 +11,8 @@ from dao.ContaDAO import ContaDAO
 from dao.GrupoTempDAO import GrupoTempDAO
 
 # Instâncias dos DAOs
-# Conta e Personagem persistem em ARQUIVO (.bin)
 dao_conta = ContaDAO()
 dao_perso = PersonagemDAO()
-
-# GrupoTemp persiste apenas em MEMÓRIA (RAM) - Criado uma vez na execução
 dao_grupo_memoria = GrupoTempDAO()
 
 def menu_grupos(id_conta_logada):
@@ -31,12 +28,10 @@ def menu_grupos(id_conta_logada):
         op = input("\nEscolha uma opção: ")
 
         if op == "1":
-            # Listar para escolher quem será o "líder" criador
             print("\nSelecione o personagem para criar o grupo:")
             dao_perso.listar_por_conta(id_conta_logada)
             try:
                 id_p = int(input("Digite o ID do Personagem: "))
-                # Verifica se o personagem realmente pertence ao usuário logado
                 p_check = dao_perso.read(id_p)
                 if p_check and p_check.id_conta == id_conta_logada:
                     novo_id = dao_grupo_memoria.criar_grupo_automatico(id_conta_logada, id_p)
@@ -72,17 +67,17 @@ def menu_grupos(id_conta_logada):
 
 def menu_personagens(id_conta_logada, nome_usuario):
     while True:
-        print(f"\n" + "="*40)
+        print(f"\n" + "="*45)
         print(f" LOGADO COMO: {nome_usuario} (ID: {id_conta_logada})")
-        print("="*40)
+        print("="*45)
         print("1. Criar Personagem")
-        print("2. Pesquisar Personagem (por ID)")
-        print("3. Pesquisar Personagem (Hash - ID)")
-        print("4. Pesquisar Personagem (Árvore B+ - Nível)") # Exemplo de uso da Árvore B+
-        print("5. Listar MEUS Personagens")
+        print("2. Pesquisar Personagem (Hash Extensível - ID)")
+        print("3. Pesquisar Personagem (Árvore B+ - ID)")
+        print("4. Pesquisar Personagem por Nível (B+)")
+        print("5. Listar MEUS Personagens (Indexado 1:N)")
         print("6. Atualizar Personagem")
         print("7. Excluir Personagem (Lógica)")
-        print("8. Gerenciar Grupos Temporários") # Nova integração
+        print("8. Gerenciar Grupos Temporários")
         print("9. Logout / Voltar")
         
         op = input("\nEscolha uma opção: ")
@@ -90,35 +85,58 @@ def menu_personagens(id_conta_logada, nome_usuario):
         if op == "1":
             nome = input("Nome do personagem: ")
             nivel = float(input("Nível inicial: "))
-            novo_p = Personagem(0, nome, nivel, id_conta_logada)
-            dao_perso.create(novo_p)
+            
+            # Validação do atributo "Função" exigido na Fase 2
+            while True:
+                funcao = input("Função (dano, tanque, suporte): ").lower()
+                if funcao in ["dano", "tanque", "suporte"]:
+                    break
+                print("[Erro] Escolha uma função válida!")
+
+            # O construtor agora lida com o atributo função
+            novo_p = Personagem(0, nome, nivel, id_conta_logada, funcao)
+            dao_perso.create(novo_p) # Sincroniza Hash e B+
 
         elif op == "2":
             try:
-                id_busca = int(input("Digite o ID do personagem: "))
-                p = dao_perso.read(id_busca)
+                id_busca = int(input("Digite o ID (Busca Hash): "))
+                p = dao_perso.read(id_busca) # Busca direta O(1) via Hash
                 if p and p.id_conta == id_conta_logada:
-                    print(f"\n[Sucesso] ID: {p.id} | Nome: {p.nome} | Nível: {p.nivel}")
+                    funcao_str = p.funcao.decode('utf-8').strip('\x00')
+                    print(f"\n[Hash] ID: {p.id} | Nome: {p.nome.decode().strip()} | Função: {funcao_str}")
                 else:
                     print("\n[Erro] Personagem não encontrado ou acesso negado.")
             except ValueError:
                 print("\n[Erro] ID inválido.")
+
+        elif op == "3":
+            try:
+                id_busca = int(input("Digite o ID (Busca B+): "))
+                p = dao_perso.read_bplus(id_busca) # Requisito d: Busca via B+
+                if p and p.id_conta == id_conta_logada:
+                    print(f"\n[B+] ID: {p.id} | Nome: {p.nome.decode().strip()} | Nível: {p.nivel}")
+                else:
+                    print("\n[Erro] Registro não encontrado na árvore.")
+            except ValueError:
+                print("\n[Erro] Entrada inválida.")
                 
         elif op == "4":
             try:
-                nivel = float(input("Digite o nível: "))
-                lista = dao_perso.buscar_por_nivel(nivel)
-
+                nivel = float(input("Digite o nível para busca (B+): "))
+                lista = dao_perso.buscar_por_nivel(nivel) # Busca indexada por nível
                 if lista:
                     print("\n--- Personagens encontrados ---")
                     for p in lista:
-                        print(f"ID: {p.id} | Nome: {p.nome} | Nível: {p.nivel}")
+                        print(f"ID: {p.id} | Nome: {p.nome.decode().strip()} | Nível: {p.nivel}")
                 else:
-                    print("\nNenhum personagem encontrado.")
+                    print("\nNenhum personagem com este nível.")
             except ValueError:
                 print("\n[Erro] Entrada inválida.")
 
         elif op == "5":
+            print(f"\n{'ID':<5} | {'Nome':<20} | {'Nível':<10} | {'Função':<10}")
+            print("-" * 55)
+            # Requisito b: Relacionamento 1:N via Hash Extensível
             dao_perso.listar_por_conta(id_conta_logada)
 
         elif op == "6":
@@ -126,9 +144,18 @@ def menu_personagens(id_conta_logada, nome_usuario):
                 id_up = int(input("ID do personagem para atualizar: "))
                 p_check = dao_perso.read(id_up)
                 if p_check and p_check.id_conta == id_conta_logada:
-                    n_nome = input("Novo Nome: ")
-                    n_nivel = float(input("Novo Nível: "))
-                    dao_perso.update(id_up, n_nome, n_nivel, id_conta_logada)
+                    n_nome = input(f"Novo Nome [{p_check.nome.decode().strip()}]: ") or p_check.nome.decode().strip()
+                    n_nivel = input(f"Novo Nível [{p_check.nivel}]: ")
+                    n_nivel = float(n_nivel) if n_nivel else p_check.nivel
+                    
+                    while True:
+                        f_atual = p_check.funcao.decode().strip('\x00')
+                        n_funcao = input(f"Nova Função [{f_atual}]: ").lower() or f_atual
+                        if n_funcao in ["dano", "tanque", "suporte"]: break
+                        print("[Erro] Função inválida.")
+
+                    dao_perso.update(id_up, n_nome, n_nivel, id_conta_logada, n_funcao)
+                    print("\n[Sucesso] Personagem atualizado!")
                 else:
                     print("\n[Erro] Acesso negado.")
             except ValueError:
@@ -139,8 +166,8 @@ def menu_personagens(id_conta_logada, nome_usuario):
                 id_del = int(input("ID para excluir: "))
                 p_check = dao_perso.read(id_del)
                 if p_check and p_check.id_conta == id_conta_logada:
-                    dao_perso.delete(id_del)
-                    print("\n[Sucesso] Excluído logicamente.")
+                    dao_perso.delete(id_del) # Exclusão lógica indexada
+                    print("\n[Sucesso] Personagem excluído logicamente.")
             except ValueError:
                 print("\n[Erro] ID inválido.")
 
@@ -152,15 +179,15 @@ def menu_personagens(id_conta_logada, nome_usuario):
 
 def menu_contas():
     while True:
-        print("\n" + "#"*40)
+        print("\n" + "#"*45)
         print("     SISTEMA DE RPG - AED III (PUC MINAS)     ")
-        print("#"*40)
+        print("#"*45)
         print("1. Criar Nova Conta")
-        print("2. Pesquisar Conta (por ID)")
+        print("2. Pesquisar Conta (Hash Extensível)")
         print("3. Atualizar Dados da Conta")
-        print("4. Excluir Conta (Lógica)")
+        print("4. Excluir Conta (Lógica + Hash)")
         print("5. ENTRAR (Login)")
-        print("6. Ordenar usuários por nome")
+        print("6. Ordenação Externa (por Usuário)")
         print("7. Sair do Programa")
         
         opcao = input("\nEscolha uma opção: ")
@@ -169,29 +196,27 @@ def menu_contas():
             u = input("Usuário: ")
             e = input("E-mail: ")
             d = input("Data (DD/MM/AAAA): ")
-            dao_conta.create(Conta(0, u, e, d))
+            dao_conta.create(Conta(0, u, e, d)) # Criação indexada por Hash
 
         elif opcao == "2":
             try:
                 id_c = int(input("ID da Conta: "))
-                c = dao_conta.read(id_c)
-                if c: print(f"\nUsuário: {c.usuario} | E-mail: {c.email}")
-                else: print("\nConta não encontrada.")
+                c = dao_conta.read(id_c) # Busca O(1) via Hash
+                if c: print(f"\n[Hash] Usuário: {c.usuario} | E-mail: {c.email}")
+                else: print("\nConta não encontrada no índice.")
             except ValueError: print("\nID inválido.")
 
         elif opcao == "3":
             try:
                 id_c = int(input("ID para atualizar: "))
-                # Primeiro, buscamos a conta para garantir que ela existe
                 conta_existente = dao_conta.read(id_c)
                 if conta_existente:
                     u = input(f"Novo Usuário [{conta_existente.usuario}]: ") or conta_existente.usuario
                     e = input(f"Novo Email [{conta_existente.email}]: ") or conta_existente.email
                     d = input(f"Nova Data [{conta_existente.data}]: ") or conta_existente.data
             
-                    # Criamos o objeto atualizado
                     conta_atualizada = Conta(id_c, u, e, d)
-                    dao_conta.update(id_c, conta_atualizada)
+                    dao_conta.update(id_c, conta_atualizada) # Atualização via Hash
                     print("\n[Sucesso] Conta atualizada!")
                 else:
                     print("\n[Erro] Conta não encontrada.")
@@ -201,7 +226,8 @@ def menu_contas():
         elif opcao == "4":
             try:
                 id_c = int(input("ID para deletar: "))
-                dao_conta.delete(id_c)
+                if dao_conta.delete(id_c): # Remove do .bin e do Hash
+                    print("Exclusão concluída com sucesso.")
             except ValueError: print("\nID inválido.")
 
         elif opcao == "5":
@@ -213,10 +239,12 @@ def menu_contas():
                 print("\n[Erro] Login inválido ou conta excluída.")
 
         elif opcao == "6":
-            dao_conta.ordenar_externo_usuario()
-            print("Arquivo Ordenado!")
+            print("\nIniciando Ordenação Externa (Intercalação Balanceada)...")
+            dao_conta.ordenar_externo_usuario() # Requisito c: Ordenação por runs
+            print("Arquivo 'contas_ordenadas.bin' gerado.")
+
         elif opcao == "7":
-            print("Saindo...")
+            print("Encerrando sistema...")
             break
 
 if __name__ == "__main__":
