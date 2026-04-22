@@ -1,0 +1,48 @@
+{% extends "base_wow.html" %}
+
+{% block title %}Selecionar Herói - World of RPGcraft{% endblock %}
+
+{% block content %}
+<h1 class="wow-title"> 
+    {% if id_grupo == 0 %} Iniciar Nova Jornada {% else %} Juntar-se ao Grupo #{{id_grupo}} {% endif %}
+</h1>
+
+<div style="max-width: 800px; margin: 0 auto;">
+    <div class="wow-card wow-card-highlight">
+        <div class="wow-card-title"> Escolha seu Representante</div>
+        <p class="wow-note" style="margin-bottom: 20px;">
+            Aventureiro: <strong>{{usuario}}</strong>. Selecione um herói para esta missão.
+        </p>
+
+        <form method="POST" action="{% if id_grupo == 0 %}/processar_criacao_grupo{% else %}/entrar_no_grupo_final?id_g={{id_grupo}}{% endif %}">
+            
+            <table class="wow-table">
+                <thead>
+                    <tr>
+                        <th>Selecionar</th>
+                        <th>ID</th>
+                        <th>Nome</th>
+                        <th>Função</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{personagens|safe}}
+                </tbody>
+            </table>
+
+            <div class="wow-actions" style="justify-content: flex-start; margin-top: 25px;">
+                <button type="submit" class="wow-btn wow-btn-success"> Confirmar Escolha</button>
+                <a href="/grupos" class="wow-btn"> Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Transforma as linhas da tabela em campos de rádio para seleção
+    document.querySelectorAll('.wow-table tbody tr').forEach(tr => {
+        const id = tr.cells[0].innerText;
+        tr.innerHTML = `<td><input type="radio" name="id_p" value="${id}" required></td>` + tr.innerHTML;
+    });
+</script>
+{% endblock %}

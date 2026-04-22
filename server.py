@@ -114,28 +114,34 @@ class Servidor(BaseHTTPRequestHandler):
     def do_GET(self):
         usuario_logado = self._get_usuario_logado()
         url_parseada = urllib.parse.urlparse(self.path)
+        # Normalização do caminho para evitar erros 404 com barras extras
+        caminho = url_parseada.path.rstrip('/') or '/'
         params = urllib.parse.parse_qs(url_parseada.query)
 
         # Arquivos Estáticos e Imagens
-        if self.path.startswith(("/static/", "/imagens/")):
-            folder = "static" if "/static/" in self.path else "imagens"
-            caminho = os.path.join("templates", folder, self.path.split(f"/{folder}/")[-1])
-            if os.path.isfile(caminho):
-                self.send_response(200)
-                self.send_header("Content-type", mimetypes.guess_type(caminho)[0] or "application/octet-stream")
-                self.end_headers()
-                with open(caminho, "rb") as f: self.wfile.write(f.read())
-            else: self.send_error(404)
+        if caminho.startswith(("/static", "/imagens")):
+            folder = "static" if "/static" in caminho else "imagens"
+            path_parts = caminho.split(f"/{folder}/")
+            if len(path_parts) > 1:
+                rel_path = path_parts[-1]
+                file_path = os.path.join("templates", folder, rel_path)
+                if os.path.isfile(file_path):
+                    self.send_response(200)
+                    self.send_header("Content-type", mimetypes.guess_type(file_path)[0] or "application/octet-stream")
+                    self.end_headers()
+                    with open(file_path, "rb") as f: self.wfile.write(f.read())
+                    return
+            self.send_error(404)
             return
 
         # Roteamento
-        if self.path == "/":
+        if caminho == "/":
             self.send_response(200)
             self.end_headers()
             html = self._render_template('home_logado.html', {'usuario': usuario_logado['usuario']}) if usuario_logado else self._render_template('home.html')
             self.wfile.write(html.encode())
 
-        elif self.path == "/personagens":
+        elif caminho == "/personagens":
             if not usuario_logado: return self._redirect("/login")
             self.send_response(200)
             self.end_headers()
@@ -147,7 +153,7 @@ class Servidor(BaseHTTPRequestHandler):
 
         # --- SISTEMA DE GRUPOS (FASE 2) ---
         
-        elif self.path == "/grupos":
+        elif caminho == "/grupos":
             if not usuario_logado: return self._redirect("/login")
             self.send_response(200)
             self.end_headers()
@@ -166,7 +172,7 @@ class Servidor(BaseHTTPRequestHandler):
             })
             self.wfile.write(html.encode())
 
-        elif self.path.startswith("/detalhes_grupo"):
+        elif caminho == "/detalhes_grupo":
             if not usuario_logado: return self._redirect("/login")
             id_g = int(params.get('id', [0])[0])
             membros = dao_grupo.listar_membros_do_grupo(id_g)
@@ -185,7 +191,7 @@ class Servidor(BaseHTTPRequestHandler):
             html = self._render_template('detalhes_grupo.html', {'id_grupo': id_g, 'linhas_membros': linhas})
             self.wfile.write(html.encode())
 
-        elif self.path.startswith("/selecionar_personagem_grupo"):
+        elif caminho == "/selecionar_personagem_grupo":
             if not usuario_logado: return self._redirect("/login")
             id_g = int(params.get('id', [0])[0])
             self.send_response(200)
@@ -197,19 +203,19 @@ class Servidor(BaseHTTPRequestHandler):
             })
             self.wfile.write(html.encode())
 
-        elif self.path.startswith("/entrar_no_grupo_final"):
+        elif caminho == "/entrar_no_grupo_final":
             if not usuario_logado: return self._redirect("/login")
             id_g = int(params.get('id_g', [0])[0])
             id_p = int(params.get('id_p', [0])[0])
             
             dao_p = PersonagemDAO()
-            # A regra 1 Tanque / 1 Suporte / 3 Danos é validada aqui
+            # Validação da regra 1 Tanque / 1 Suporte / 3 Danos
             if dao_grupo.adicionar_ao_grupo(id_g, usuario_logado['id'], id_p, dao_p):
                 self._redirect(f"/detalhes_grupo?id={id_g}")
             else:
-                self._render_mensagem("Erro de Composição!", "O grupo não pode aceitar este personagem (Limite de função atingido ou você já está no grupo).", "/grupos", "Voltar")
+                self._render_mensagem("Erro de Composição!", "O grupo não pode aceitar este personagem (Limite atingido ou você já está no grupo).", "/grupos", "Voltar")
 
-        elif self.path == "/criar_grupo_web":
+        elif caminho == "/criar_grupo_web":
             if not usuario_logado: return self._redirect("/login")
             self.send_response(200)
             self.end_headers()
@@ -221,24 +227,24 @@ class Servidor(BaseHTTPRequestHandler):
             self.wfile.write(html.encode())
 
         # Rotas de Cadastro/Login
-        elif self.path == "/criar_conta":
+        elif caminho == "/criar_conta":
             self.send_response(200)
             self.end_headers()
             self.wfile.write(self._render_template('criar_conta.html').encode())
 
-        elif self.path == "/login":
+        elif caminho == "/login":
             self.send_response(200)
             self.end_headers()
             self.wfile.write(self._render_template('login.html').encode())
 
-        elif self.path == "/logout":
+        elif caminho == "/logout":
             self.send_response(302)
             self.send_header('Location', '/')
             self.send_header('Set-Cookie', 'id_conta=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT')
             self.send_header('Set-Cookie', 'usuario=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT')
             self.end_headers()
 
-        elif self.path.startswith("/excluir_personagem"):
+        elif caminho == "/excluir_personagem":
             if not usuario_logado: return self._redirect("/login")
             id_p = int(params.get('id', [0])[0])
             dao = PersonagemDAO()
@@ -247,7 +253,7 @@ class Servidor(BaseHTTPRequestHandler):
                 dao.delete(id_p)
             self._redirect("/personagens")
 
-        elif self.path.startswith("/editar_personagem"):
+        elif caminho == "/editar_personagem":
             if not usuario_logado: return self._redirect("/login")
             id_p = int(params.get('id', [0])[0])
             p = PersonagemDAO().read(id_p)
@@ -265,23 +271,32 @@ class Servidor(BaseHTTPRequestHandler):
             })
             self.wfile.write(html.encode())
 
+        elif caminho == "/criar_personagem":
+            if not usuario_logado: return self._redirect("/login")
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(self._render_template('criar_personagem.html', {'usuario': usuario_logado['usuario']}).encode())
+
         else: self.send_error(404)
 
     # --- ROTAS POST ---
 
     def do_POST(self):
         usuario_logado = self._get_usuario_logado()
+        url_parseada = urllib.parse.urlparse(self.path)
+        caminho = url_parseada.path.rstrip('/') or '/'
+        
         tamanho = int(self.headers['Content-Length'])
         parametros = urllib.parse.parse_qs(self.rfile.read(tamanho).decode())
 
-        if self.path == "/salvar_conta":
+        if caminho == "/salvar_conta":
             u, e, d = parametros.get("usuario", [""])[0], parametros.get("email", [""])[0], parametros.get("data", [""])[0]
             dao = ContaDAO()
             if dao.read_por_usuario(u): return self._render_mensagem("Erro!", "Nome de usuário já existe.", "/criar_conta", "Voltar")
             dao.create(Conta(0, u, e, d))
             self._render_mensagem("Sucesso!", f"Conta de {u} criada!", "/", "Ir para início")
 
-        elif self.path == "/autenticar":
+        elif caminho == "/autenticar":
             u = parametros.get("usuario", [""])[0]
             conta = ContaDAO().read_por_usuario(u)
             if conta and conta.lapide == b' ':
@@ -290,9 +305,9 @@ class Servidor(BaseHTTPRequestHandler):
                 self._set_cookie('id_conta', str(conta.id))
                 self._set_cookie('usuario', conta.usuario)
                 self.end_headers()
-            else: self._render_mensagem("Acesso Negado!", "Usuário não encontrado ou banido.", "/login", "Tentar novamente")
+            else: self._render_mensagem("Acesso Negado!", "Usuário não encontrado.", "/login", "Tentar novamente")
 
-        elif self.path == "/salvar_personagem":
+        elif caminho == "/salvar_personagem":
             if not usuario_logado: return self._redirect("/login")
             n, f_val = parametros.get("nome", [""])[0], parametros.get("funcao", ["dano"])[0].lower()
             try: niv = float(parametros.get("nivel", ["1"])[0])
@@ -300,7 +315,7 @@ class Servidor(BaseHTTPRequestHandler):
             PersonagemDAO().create(Personagem(0, n, niv, usuario_logado['id'], f_val))
             self._redirect("/personagens")
 
-        elif self.path == "/atualizar_personagem":
+        elif caminho == "/atualizar_personagem":
             if not usuario_logado: return self._redirect("/login")
             id_p = int(parametros.get("id", [0])[0])
             n, f_val = parametros.get("nome", [""])[0], parametros.get("funcao", ["dano"])[0].lower()
@@ -308,16 +323,15 @@ class Servidor(BaseHTTPRequestHandler):
             PersonagemDAO().update(id_p, n, niv, usuario_logado['id'], f_val)
             self._redirect("/personagens")
 
-        elif self.path == "/processar_criacao_grupo":
+        elif caminho == "/processar_criacao_grupo":
             if not usuario_logado: return self._redirect("/login")
             id_p = int(parametros.get("id_p", [0])[0])
             dao_p = PersonagemDAO()
             id_g = dao_grupo.criar_grupo_automatico(usuario_logado['id'], id_p, dao_p)
             self._redirect(f"/detalhes_grupo?id={id_g}")
 
-        elif self.path == "/excluir_conta":
+        elif caminho == "/excluir_conta":
             if not usuario_logado: return self._redirect("/login")
-            # Exclusão lógica indexada
             ContaDAO().delete(usuario_logado['id'])
             self.send_response(302)
             self.send_header('Location', '/')
