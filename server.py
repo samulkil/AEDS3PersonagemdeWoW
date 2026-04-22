@@ -3,24 +3,27 @@ import urllib.parse
 import os
 import re
 import mimetypes
+import socketserver
+
+# Importação dos DAOs e Modelos
 from dao.ContaDAO import ContaDAO
 from model.Conta import Conta
 from dao.PersonagemDAO import PersonagemDAO
 from model.Personagem import Personagem
-import socketserver
+from dao.GrupoTempDAO import GrupoTempDAO
 
 HOST = "localhost"
 PORT = 8000
 
+# Instância global para persistência em memória durante a sessão
+dao_grupo = GrupoTempDAO()
+
 class Servidor(BaseHTTPRequestHandler):
     
-    #Renderiza o template HTML
+    # --- UTILITÁRIOS ---
+    
     def _render_template(self, nome_arquivo, contexto=None):
-        
-        if contexto is None:
-            contexto = {}
-        
-        # Lê o template principal
+        if contexto is None: contexto = {}
         template_path = f'templates/{nome_arquivo}'
         
         if not os.path.exists(template_path):
@@ -29,628 +32,314 @@ class Servidor(BaseHTTPRequestHandler):
         with open(template_path, 'r', encoding='utf-8') as f:
             conteudo = f.read()
         
-        # Processa herança ({% extends "base.html" %})
+        # Processa herança ({% extends %})
         extends_match = re.search(r'{%\s*extends\s+"([^"]+)"\s*%}', conteudo)
-        
         if extends_match:
             base_template = extends_match.group(1)
-            
-            # Extrai os blocos do template filho
             blocos = {}
             padrao_bloco = r'{%\s*block\s+(\w+)\s*%}(.*?){%\s*endblock\s*%}'
-            
             for match in re.finditer(padrao_bloco, conteudo, re.DOTALL):
-                nome_bloco = match.group(1)
-                conteudo_bloco = match.group(2)
-                blocos[nome_bloco] = conteudo_bloco
+                blocos[match.group(1)] = match.group(2)
             
-            # Carrega o template base
             with open(f'templates/{base_template}', 'r', encoding='utf-8') as f:
                 conteudo = f.read()
-            
-            # Substitui os blocos no template base
             for nome_bloco, conteudo_bloco in blocos.items():
                 padrao = r'{%\s*block\s+' + nome_bloco + r'\s*%}.*?{%\s*endblock\s*%}'
                 conteudo = re.sub(padrao, conteudo_bloco, conteudo, flags=re.DOTALL)
         
-        # Processa includes ({% include "arquivo.html" %})
-        def processa_include(match):
-            include_file = match.group(1)
-            try:
-                with open(f'templates/{include_file}', 'r', encoding='utf-8') as f:
-                    return f.read()
-            except:
-                return f"<!-- Erro ao incluir: {include_file} -->"
-        
-        conteudo = re.sub(r'{%\s*include\s+"([^"]+)"\s*%}', processa_include, conteudo)
+        # Processa includes ({% include %})
+        conteudo = re.sub(r'{%\s*include\s+"([^"]+)"\s*%}', 
+                         lambda m: open(f"templates/{m.group(1)}", 'r', encoding='utf-8').read(), 
+                         conteudo)
         
         # Substitui variáveis ({{variavel}})
         for chave, valor in contexto.items():
-            # Suporte a safe filter: {{variavel|safe}}
             padrao_safe = r'{{\s*' + chave + r'\s*\|\s*safe\s*}}'
             if re.search(padrao_safe, conteudo):
                 conteudo = re.sub(padrao_safe, str(valor), conteudo)
             else:
-                # Escapa HTML por padrão
                 valor_escapado = str(valor).replace('<', '&lt;').replace('>', '&gt;')
                 padrao = r'{{\s*' + chave + r'\s*}}'
                 conteudo = re.sub(padrao, valor_escapado, conteudo)
         
-        # Remove blocos não processados (limpeza)
-        conteudo = re.sub(r'{%\s*block\s+\w+\s*%}.*?{%\s*endblock\s*%}', '', conteudo, flags=re.DOTALL)
-        
-        # Remove tags de template restantes
-        conteudo = re.sub(r'{%[^%]*%}', '', conteudo)
-        
         return conteudo
-    
-    
-    # Pega Seta um cookie Simples
-    def _set_cookie(self, nome, valor):
 
+    def _set_cookie(self, nome, valor):
         self.send_header('Set-Cookie', f'{nome}={valor}; Path=/; HttpOnly')
             
-    # Recupera os Cookies        
     def _get_cookie(self, nome):
-    
         if 'Cookie' in self.headers:
-            cookies = self.headers['Cookie'].split('; ')
-            for cookie in cookies:
+            for cookie in self.headers['Cookie'].split('; '):
                 if '=' in cookie:
                     chave, valor = cookie.split('=', 1)
-                    if chave == nome:
-                        return valor
+                    if chave == nome: return valor
         return None
-    
 
-    # Verifica se tem usuário logado e retorna seus dados
     def _get_usuario_logado(self):
-       
         id_conta = self._get_cookie('id_conta')
         usuario = self._get_cookie('usuario')
-        
         if id_conta and usuario:
             dao = ContaDAO()
             conta = dao.read(int(id_conta))
             if conta and conta.lapide == b' ':
                 return {'id': int(id_conta), 'usuario': usuario}
         return None
-    
-    #  Gera as linhas da tabela de personagens
+
     def _gerar_linhas_personagens(self, id_conta):
-        
+        """Usa o relacionamento 1:N via Hash Extensível para listar personagens."""
         dao = PersonagemDAO()
-        
-        import io
-        import sys
-        
+        import io, sys
         old_stdout = sys.stdout
         sys.stdout = io.StringIO()
         
+        # Método indexado via Hash
         dao.listar_por_conta(id_conta)
         
         output = sys.stdout.getvalue()
         sys.stdout = old_stdout
         
         linhas_html = ""
-        
         if output.strip():
-            linhas = output.strip().split('\n')
-            
-            for linha in linhas:
+            for linha in output.strip().split('\n'):
                 if '|' in linha:
-                    partes = [p.strip() for p in linha.split('|')]
-                    if len(partes) >= 4:
-                        linhas_html += "<tr>"
-                        linhas_html += f"<td>{partes[0]}</td>"
-                        linhas_html += f"<td>{partes[1]}</td>"
-                        linhas_html += f"<td>{partes[2]}</td>"
-                        linhas_html += f"<td>{partes[3]}</td>"
-                        linhas_html += "<td>"
-                        linhas_html += f"<a href='/editar_personagem?id={partes[0]}' class='wow-link'>✏️ Editar</a> "
-                        linhas_html += f"<a href='/excluir_personagem?id={partes[0]}' class='wow-link wow-link-danger' onclick='return confirm(\"Tem certeza que deseja excluir este personagem?\");'>🗑️ Excluir</a>"
-                        linhas_html += "</td>"
-                        linhas_html += "</tr>"
-        
+                    p = [part.strip() for part in linha.split('|')]
+                    if len(p) >= 4:
+                        linhas_html += f"<tr><td>{p[0]}</td><td>{p[1]}</td><td>{p[2]}</td><td>{p[3]}</td>"
+                        linhas_html += f"<td><a href='/editar_personagem?id={p[0]}' class='wow-link'>✏️ Editar</a> "
+                        linhas_html += f"<a href='/excluir_personagem?id={p[0]}' class='wow-link wow-link-danger' onclick='return confirm(\"Excluir?\");'>🗑️ Excluir</a></td></tr>"
         return linhas_html
-    
+
+    # --- ROTAS GET ---
+
     def do_GET(self):
         usuario_logado = self._get_usuario_logado()
+        url_parseada = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(url_parseada.query)
 
-        # Rota: Arquivos estáticos (CSS/JS)
-        if self.path.startswith("/static/"):
-            caminho_relativo = self.path[len("/static/"):]
-            caminho_seguro = os.path.normpath(caminho_relativo).replace("\\", "/")
-
-            if ".." in caminho_seguro:
-                self.send_response(403)
+        # Arquivos Estáticos e Imagens
+        if self.path.startswith(("/static/", "/imagens/")):
+            folder = "static" if "/static/" in self.path else "imagens"
+            caminho = os.path.join("templates", folder, self.path.split(f"/{folder}/")[-1])
+            if os.path.isfile(caminho):
+                self.send_response(200)
+                self.send_header("Content-type", mimetypes.guess_type(caminho)[0] or "application/octet-stream")
                 self.end_headers()
-                return
-
-            caminho_arquivo = os.path.join("templates", "static", caminho_seguro)
-            if not os.path.isfile(caminho_arquivo):
-                self.send_response(404)
-                self.end_headers()
-                return
-
-            tipo, _ = mimetypes.guess_type(caminho_arquivo)
-            if not tipo:
-                tipo = "application/octet-stream"
-
-            self.send_response(200)
-            self.send_header("Content-type", tipo)
-            self.end_headers()
-
-            with open(caminho_arquivo, "rb") as f:
-                self.wfile.write(f.read())
+                with open(caminho, "rb") as f: self.wfile.write(f.read())
+            else: self.send_error(404)
             return
 
-        # Rota: Arquivos de imagem (fundo/recursos visuais)
-        if self.path.startswith("/imagens/"):
-            caminho_relativo = self.path[len("/imagens/"):]
-            caminho_seguro = os.path.normpath(caminho_relativo).replace("\\", "/")
-
-            if ".." in caminho_seguro:
-                self.send_response(403)
-                self.end_headers()
-                return
-
-            caminho_arquivo = os.path.join("templates", "imagens", caminho_seguro)
-            if not os.path.isfile(caminho_arquivo):
-                self.send_response(404)
-                self.end_headers()
-                return
-
-            tipo, _ = mimetypes.guess_type(caminho_arquivo)
-            if not tipo:
-                tipo = "application/octet-stream"
-
-            self.send_response(200)
-            self.send_header("Content-type", tipo)
-            self.end_headers()
-
-            with open(caminho_arquivo, "rb") as f:
-                self.wfile.write(f.read())
-            return
-        
-        # Rota: Home
+        # Roteamento
         if self.path == "/":
             self.send_response(200)
-            self.send_header("Content-type", "text/html")
+            self.end_headers()
+            html = self._render_template('home_logado.html', {'usuario': usuario_logado['usuario']}) if usuario_logado else self._render_template('home.html')
+            self.wfile.write(html.encode())
+
+        elif self.path == "/personagens":
+            if not usuario_logado: return self._redirect("/login")
+            self.send_response(200)
+            self.end_headers()
+            html = self._render_template('personagens.html', {
+                'usuario': usuario_logado['usuario'], 
+                'personagens': self._gerar_linhas_personagens(usuario_logado['id'])
+            })
+            self.wfile.write(html.encode())
+
+        # --- SISTEMA DE GRUPOS (FASE 2) ---
+        
+        elif self.path == "/grupos":
+            if not usuario_logado: return self._redirect("/login")
+            self.send_response(200)
             self.end_headers()
             
-            if usuario_logado:
-                contexto = {
-                    'usuario': usuario_logado['usuario'],
-                    'id': usuario_logado['id']
-                }
-                html = self._render_template('home_logado.html', contexto)
-            else:
-                html = self._render_template('home.html')
+            lista_html = ""
+            for id_g in dao_grupo.grupos_criados:
+                membros = dao_grupo.listar_membros_do_grupo(id_g)
+                lista_html += f"""<div class='wow-card'><div class='wow-card-title'>Grupo #{id_g} ({len(membros)}/5)</div>
+                                  <div class='wow-actions' style='justify-content: flex-start;'>
+                                  <a href='/detalhes_grupo?id={id_g}' class='wow-btn'>Ver Detalhes</a>
+                                  <a href='/selecionar_personagem_grupo?id={id_g}' class='wow-btn wow-btn-success'>Entrar</a></div></div>"""
             
+            html = self._render_template('grupos.html', {
+                'usuario': usuario_logado['usuario'], 
+                'lista_grupos': lista_html or "<p>Nenhum grupo ativo no momento.</p>"
+            })
             self.wfile.write(html.encode())
-        
-        # Rota: Criar Conta
+
+        elif self.path.startswith("/detalhes_grupo"):
+            if not usuario_logado: return self._redirect("/login")
+            id_g = int(params.get('id', [0])[0])
+            membros = dao_grupo.listar_membros_do_grupo(id_g)
+            
+            linhas = ""
+            dao_p = PersonagemDAO()
+            for m in membros:
+                p = dao_p.read(m.id_personagem) # Busca via Hash PK
+                if p:
+                    f_str = p.funcao.decode().strip('\x00')
+                    n_str = p.nome.decode().strip('\x00')
+                    linhas += f"<tr><td>{m.id_conta}</td><td>{m.id_personagem}</td><td>{n_str}</td><td>{f_str}</td></tr>"
+            
+            self.send_response(200)
+            self.end_headers()
+            html = self._render_template('detalhes_grupo.html', {'id_grupo': id_g, 'linhas_membros': linhas})
+            self.wfile.write(html.encode())
+
+        elif self.path.startswith("/selecionar_personagem_grupo"):
+            if not usuario_logado: return self._redirect("/login")
+            id_g = int(params.get('id', [0])[0])
+            self.send_response(200)
+            self.end_headers()
+            html = self._render_template('criar_grupo_selecao.html', {
+                'usuario': usuario_logado['usuario'],
+                'id_grupo': id_g,
+                'personagens': self._gerar_linhas_personagens(usuario_logado['id'])
+            })
+            self.wfile.write(html.encode())
+
+        elif self.path.startswith("/entrar_no_grupo_final"):
+            if not usuario_logado: return self._redirect("/login")
+            id_g = int(params.get('id_g', [0])[0])
+            id_p = int(params.get('id_p', [0])[0])
+            
+            dao_p = PersonagemDAO()
+            # A regra 1 Tanque / 1 Suporte / 3 Danos é validada aqui
+            if dao_grupo.adicionar_ao_grupo(id_g, usuario_logado['id'], id_p, dao_p):
+                self._redirect(f"/detalhes_grupo?id={id_g}")
+            else:
+                self._render_mensagem("Erro de Composição!", "O grupo não pode aceitar este personagem (Limite de função atingido ou você já está no grupo).", "/grupos", "Voltar")
+
+        elif self.path == "/criar_grupo_web":
+            if not usuario_logado: return self._redirect("/login")
+            self.send_response(200)
+            self.end_headers()
+            html = self._render_template('criar_grupo_selecao.html', {
+                'usuario': usuario_logado['usuario'],
+                'id_grupo': 0, # Indica que é criação
+                'personagens': self._gerar_linhas_personagens(usuario_logado['id'])
+            })
+            self.wfile.write(html.encode())
+
+        # Rotas de Cadastro/Login
         elif self.path == "/criar_conta":
             self.send_response(200)
-            self.send_header("Content-type", "text/html")
             self.end_headers()
-            
-            html = self._render_template('criar_conta.html')
-            self.wfile.write(html.encode())
-        
-        # Rota: Login
+            self.wfile.write(self._render_template('criar_conta.html').encode())
+
         elif self.path == "/login":
             self.send_response(200)
-            self.send_header("Content-type", "text/html")
             self.end_headers()
-            
-            if usuario_logado:
-                self.send_response(302)
-                self.send_header('Location', '/personagens')
-                self.end_headers()
-            else:
-                html = self._render_template('login.html')
-                self.wfile.write(html.encode())
-        
-        # Rota: Logout
+            self.wfile.write(self._render_template('login.html').encode())
+
         elif self.path == "/logout":
             self.send_response(302)
             self.send_header('Location', '/')
             self.send_header('Set-Cookie', 'id_conta=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT')
             self.send_header('Set-Cookie', 'usuario=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT')
             self.end_headers()
-        
-        # Rota: Meus Personagens
-        elif self.path == "/personagens":
-            if not usuario_logado:
-                self.send_response(302)
-                self.send_header('Location', '/login')
-                self.end_headers()
-                return
-            
-            self.send_response(200)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-            
-            linhas_tabela = self._gerar_linhas_personagens(usuario_logado['id'])
-            
-            contexto = {
-                'usuario': usuario_logado['usuario'],
-                'personagens': linhas_tabela
-            }
-            
-            html = self._render_template('personagens.html', contexto)
-            self.wfile.write(html.encode())
-        
-        # Rota: Criar Personagem
-        elif self.path == "/criar_personagem":
-            if not usuario_logado:
-                self.send_response(302)
-                self.send_header('Location', '/login')
-                self.end_headers()
-                return
-            
-            self.send_response(200)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-            
-            contexto = {
-                'usuario': usuario_logado['usuario']
-            }
-            
-            html = self._render_template('criar_personagem.html', contexto)
-            self.wfile.write(html.encode())
-        
-        # Rota: Configurações da Conta
-        elif self.path == "/config_conta":
-            if not usuario_logado:
-                self.send_response(302)
-                self.send_header('Location', '/login')
-                self.end_headers()
-                return
-            
-            self.send_response(200)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-            
-            dao = ContaDAO()
-            conta = dao.read(usuario_logado['id'])
-            
-            contexto = {
-                'id': conta.id,
-                'usuario': conta.usuario,
-                'email': conta.email,
-                'data': conta.data
-            }
-            
-            html = self._render_template('config_conta.html', contexto)
-            self.wfile.write(html.encode())
-        
-        # Rota: Confirmar exclusão da conta
-        elif self.path == "/confirmar_excluir_conta":
-            if not usuario_logado:
-                self.send_response(302)
-                self.send_header('Location', '/login')
-                self.end_headers()
-                return
-            
-            self.send_response(200)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-            
-            contexto = {
-                'usuario': usuario_logado['usuario'],
-                'id': usuario_logado['id']
-            }
-            
-            html = self._render_template('confirmar_excluir_conta.html', contexto)
-            self.wfile.write(html.encode())
-        
-        # Rota: Excluir Personagem
-        elif self.path.startswith("/excluir_personagem"):
-            if not usuario_logado:
-                self.send_response(302)
-                self.send_header('Location', '/login')
-                self.end_headers()
-                return
-            
-            query = urllib.parse.urlparse(self.path).query
-            params = urllib.parse.parse_qs(query)
-            id_personagem = int(params.get('id', [0])[0])
-            
-            if id_personagem:
-                dao = PersonagemDAO()
-                personagem = dao.read(id_personagem)
-                
-                if personagem and personagem.id_conta == usuario_logado['id']:
-                    dao.delete(id_personagem)
-            
-            self.send_response(302)
-            self.send_header('Location', '/personagens')
-            self.end_headers()
-        
-        # Rota: Editar Personagem
-        elif self.path.startswith("/editar_personagem"):
-            if not usuario_logado:
-                self.send_response(302)
-                self.send_header('Location', '/login')
-                self.end_headers()
-                return
-            
-            query = urllib.parse.urlparse(self.path).query
-            params = urllib.parse.parse_qs(query)
-            id_personagem = int(params.get('id', [0])[0])
-            
-            dao = PersonagemDAO()
-            personagem = dao.read(id_personagem)
-            
-            if not personagem or personagem.id_conta != usuario_logado['id']:
-                self.send_response(403)
-                self.send_header("Content-type", "text/html")
-                self.end_headers()
-                self.wfile.write(b"<h1>Acesso negado!</h1>")
-                return
-            
-            self.send_response(200)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
 
-            nome_personagem = personagem.nome.decode('utf-8').strip('\x00') if isinstance(personagem.nome, bytes) else personagem.nome
-            funcao_personagem = personagem.funcao.decode('utf-8').strip('\x00') if isinstance(personagem.funcao, bytes) else personagem.funcao
+        elif self.path.startswith("/excluir_personagem"):
+            if not usuario_logado: return self._redirect("/login")
+            id_p = int(params.get('id', [0])[0])
+            dao = PersonagemDAO()
+            p = dao.read(id_p)
+            if p and p.id_conta == usuario_logado['id']:
+                dao.delete(id_p)
+            self._redirect("/personagens")
+
+        elif self.path.startswith("/editar_personagem"):
+            if not usuario_logado: return self._redirect("/login")
+            id_p = int(params.get('id', [0])[0])
+            p = PersonagemDAO().read(id_p)
+            if not p or p.id_conta != usuario_logado['id']: return self.send_error(403)
             
-            contexto = {
-                'id': personagem.id,
-                'nome': nome_personagem,
-                'nivel': personagem.nivel,
-                'usuario': usuario_logado['usuario'],
-                'selected_dano': 'selected' if funcao_personagem == 'dano' else '',
-                'selected_tanque': 'selected' if funcao_personagem == 'tanque' else '',
-                'selected_suporte': 'selected' if funcao_personagem == 'suporte' else ''
-            }
-            
-            html = self._render_template('editar_personagem.html', contexto)
-            self.wfile.write(html.encode())
-        
-        else:
-            self.send_response(404)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-            self.wfile.write(b"<h1>404 - Pagina nao encontrada</h1>")
-    
-    def do_POST(self):
-        usuario_logado = self._get_usuario_logado()
-        
-        # Rota: Salvar Conta
-        if self.path == "/salvar_conta":
-            tamanho = int(self.headers['Content-Length'])
-            dados = self.rfile.read(tamanho).decode()
-            parametros = urllib.parse.parse_qs(dados)
-            
-            usuario = parametros.get("usuario", [""])[0]
-            email = parametros.get("email", [""])[0]
-            data = parametros.get("data", [""])[0]
-            
-            if not usuario or not email or not data:
-                self.send_response(400)
-                self.send_header("Content-type", "text/html")
-                self.end_headers()
-                self.wfile.write(b"<h1>Todos os campos sao obrigatorios!</h1>")
-                return
-            
-            dao = ContaDAO()
-            existente = dao.read_por_usuario(usuario)
-            
-            if existente:
-                self.send_response(200)
-                self.send_header("Content-type", "text/html")
-                self.end_headers()
-                html = self._render_template('mensagem.html', {
-                    'titulo': 'Erro!',
-                    'mensagem': 'Nome de usuário já existe. Escolha outro.',
-                    'link': '/criar_conta',
-                    'link_texto': 'Voltar'
-                })
-                self.wfile.write(html.encode())
-                return
-            
-            conta = Conta(0, usuario, email, data)
-            dao.create(conta)
-            
+            nome_p = p.nome.decode('utf-8').strip('\x00')
+            func_p = p.funcao.decode('utf-8').strip('\x00')
             self.send_response(200)
-            self.send_header("Content-type", "text/html")
             self.end_headers()
-            
-            html = self._render_template('mensagem.html', {
-                'titulo': 'Conta criada com sucesso!',
-                'mensagem': f'Bem-vindo, {usuario}! Sua jornada começa agora.',
-                'link': '/',
-                'link_texto': 'Ir para o início'
+            html = self._render_template('editar_personagem.html', {
+                'id': p.id, 'nome': nome_p, 'nivel': p.nivel, 'usuario': usuario_logado['usuario'],
+                'selected_dano': 'selected' if func_p == 'dano' else '',
+                'selected_tanque': 'selected' if func_p == 'tanque' else '',
+                'selected_suporte': 'selected' if func_p == 'suporte' else ''
             })
             self.wfile.write(html.encode())
-        
-        # Rota: Autenticar (Login)
-        elif self.path == "/autenticar":
-            tamanho = int(self.headers['Content-Length'])
-            dados = self.rfile.read(tamanho).decode()
-            parametros = urllib.parse.parse_qs(dados)
-            
-            usuario = parametros.get("usuario", [""])[0]
-            
-            if not usuario:
-                self.send_response(400)
-                self.send_header("Content-type", "text/html")
-                self.end_headers()
-                self.wfile.write(b"<h1>Usuario obrigatorio!</h1>")
-                return
-            
+
+        else: self.send_error(404)
+
+    # --- ROTAS POST ---
+
+    def do_POST(self):
+        usuario_logado = self._get_usuario_logado()
+        tamanho = int(self.headers['Content-Length'])
+        parametros = urllib.parse.parse_qs(self.rfile.read(tamanho).decode())
+
+        if self.path == "/salvar_conta":
+            u, e, d = parametros.get("usuario", [""])[0], parametros.get("email", [""])[0], parametros.get("data", [""])[0]
             dao = ContaDAO()
-            conta = dao.read_por_usuario(usuario)
-            
+            if dao.read_por_usuario(u): return self._render_mensagem("Erro!", "Nome de usuário já existe.", "/criar_conta", "Voltar")
+            dao.create(Conta(0, u, e, d))
+            self._render_mensagem("Sucesso!", f"Conta de {u} criada!", "/", "Ir para início")
+
+        elif self.path == "/autenticar":
+            u = parametros.get("usuario", [""])[0]
+            conta = ContaDAO().read_por_usuario(u)
             if conta and conta.lapide == b' ':
                 self.send_response(302)
                 self.send_header('Location', '/personagens')
                 self._set_cookie('id_conta', str(conta.id))
                 self._set_cookie('usuario', conta.usuario)
                 self.end_headers()
-            else:
-                self.send_response(200)
-                self.send_header("Content-type", "text/html")
-                self.end_headers()
-                
-                html = self._render_template('mensagem.html', {
-                    'titulo': 'Login falhou!',
-                    'mensagem': 'Usuário não encontrado ou conta desativada.',
-                    'link': '/login',
-                    'link_texto': 'Tentar novamente'
-                })
-                self.wfile.write(html.encode())
-        
-        # Rota: Salvar Personagem
+            else: self._render_mensagem("Acesso Negado!", "Usuário não encontrado ou banido.", "/login", "Tentar novamente")
+
         elif self.path == "/salvar_personagem":
-            if not usuario_logado:
-                self.send_response(302)
-                self.send_header('Location', '/login')
-                self.end_headers()
-                return
-            
-            tamanho = int(self.headers['Content-Length'])
-            dados = self.rfile.read(tamanho).decode()
-            parametros = urllib.parse.parse_qs(dados)
-            
-            nome = parametros.get("nome", [""])[0]
-            funcao = parametros.get("funcao", ["dano"])[0].lower()
-            try:
-                nivel = float(parametros.get("nivel", ["0"])[0])
-            except ValueError:
-                nivel = 1.0
-            
-            if not nome:
-                self.send_response(400)
-                self.send_header("Content-type", "text/html")
-                self.end_headers()
-                self.wfile.write(b"<h1>Nome do personagem obrigatorio!</h1>")
-                return
+            if not usuario_logado: return self._redirect("/login")
+            n, f_val = parametros.get("nome", [""])[0], parametros.get("funcao", ["dano"])[0].lower()
+            try: niv = float(parametros.get("nivel", ["1"])[0])
+            except: niv = 1.0
+            PersonagemDAO().create(Personagem(0, n, niv, usuario_logado['id'], f_val))
+            self._redirect("/personagens")
 
-            funcoes_validas = {"dano", "tanque", "suporte"}
-            if funcao not in funcoes_validas:
-                self.send_response(400)
-                self.send_header("Content-type", "text/html")
-                self.end_headers()
-                self.wfile.write(b"<h1>Funcao invalida! Escolha entre dano, tanque ou suporte.</h1>")
-                return
-            
-            dao = PersonagemDAO()
-            personagem = Personagem(0, nome, nivel, usuario_logado['id'], funcao)
-            dao.create(personagem)
-            
-            self.send_response(302)
-            self.send_header('Location', '/personagens')
-            self.end_headers()
-        
-        # Rota: Atualizar Personagem
         elif self.path == "/atualizar_personagem":
-            if not usuario_logado:
-                self.send_response(302)
-                self.send_header('Location', '/login')
-                self.end_headers()
-                return
-            
-            tamanho = int(self.headers['Content-Length'])
-            dados = self.rfile.read(tamanho).decode()
-            parametros = urllib.parse.parse_qs(dados)
-            
-            id_personagem = int(parametros.get("id", [0])[0])
-            nome = parametros.get("nome", [""])[0]
-            nivel = float(parametros.get("nivel", [1.0])[0])
-            funcao = parametros.get("funcao", [""])[0].lower()
-            
-            dao = PersonagemDAO()
-            personagem = dao.read(id_personagem)
-            
-            if personagem and personagem.id_conta == usuario_logado['id']:
-                if not funcao:
-                    funcao = personagem.funcao.decode('utf-8').strip('\x00')
+            if not usuario_logado: return self._redirect("/login")
+            id_p = int(parametros.get("id", [0])[0])
+            n, f_val = parametros.get("nome", [""])[0], parametros.get("funcao", ["dano"])[0].lower()
+            niv = float(parametros.get("nivel", [1.0])[0])
+            PersonagemDAO().update(id_p, n, niv, usuario_logado['id'], f_val)
+            self._redirect("/personagens")
 
-                funcoes_validas = {"dano", "tanque", "suporte"}
-                if funcao in funcoes_validas:
-                    dao.update(id_personagem, nome, nivel, usuario_logado['id'], funcao)
-            
-            self.send_response(302)
-            self.send_header('Location', '/personagens')
-            self.end_headers()
-        
-        # Rota: Atualizar Conta
-        elif self.path == "/atualizar_conta":
-            if not usuario_logado:
-                self.send_response(302)
-                self.send_header('Location', '/login')
-                self.end_headers()
-                return
-            
-            tamanho = int(self.headers['Content-Length'])
-            dados = self.rfile.read(tamanho).decode()
-            parametros = urllib.parse.parse_qs(dados)
-            
-            email = parametros.get("email", [""])[0]
-            data = parametros.get("data", [""])[0]
-            
-            dao = ContaDAO()
-            conta = dao.read(usuario_logado['id'])
-            
-            if conta:
-                conta_atualizada = Conta(conta.id, conta.usuario, email, data)
-                dao.update(conta.id, conta_atualizada)
-            
-            self.send_response(302)
-            self.send_header('Location', '/config_conta')
-            self.end_headers()
-        
-        # Rota: Excluir Conta
+        elif self.path == "/processar_criacao_grupo":
+            if not usuario_logado: return self._redirect("/login")
+            id_p = int(parametros.get("id_p", [0])[0])
+            dao_p = PersonagemDAO()
+            id_g = dao_grupo.criar_grupo_automatico(usuario_logado['id'], id_p, dao_p)
+            self._redirect(f"/detalhes_grupo?id={id_g}")
+
         elif self.path == "/excluir_conta":
-            if not usuario_logado:
-                self.send_response(302)
-                self.send_header('Location', '/login')
-                self.end_headers()
-                return
-            
-            dao_conta = ContaDAO()
-            dao_perso = PersonagemDAO()
-            
-            import io
-            import sys
-            
-            old_stdout = sys.stdout
-            sys.stdout = io.StringIO()
-            dao_perso.listar_por_conta(usuario_logado['id'])
-            output = sys.stdout.getvalue()
-            sys.stdout = old_stdout
-            
-            import re
-            ids_personagens = re.findall(r'^(\d+)', output, re.MULTILINE)
-            
-            for id_str in ids_personagens:
-                dao_perso.delete(int(id_str))
-            
-            dao_conta.delete(usuario_logado['id'])
-            
+            if not usuario_logado: return self._redirect("/login")
+            # Exclusão lógica indexada
+            ContaDAO().delete(usuario_logado['id'])
             self.send_response(302)
             self.send_header('Location', '/')
             self.send_header('Set-Cookie', 'id_conta=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT')
-            self.send_header('Set-Cookie', 'usuario=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT')
             self.end_headers()
 
-class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
-    pass
+    # --- AUXILIARES ---
+    
+    def _redirect(self, url):
+        self.send_response(302)
+        self.send_header('Location', url)
+        self.end_headers()
+
+    def _render_mensagem(self, tit, msg, link, txt):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(self._render_template('mensagem.html', {'titulo': tit, 'mensagem': msg, 'link': link, 'link_texto': txt}).encode())
+
+class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer): pass
 
 if __name__ == "__main__":
-    os.makedirs('templates', exist_ok=True)
-    
     server = ThreadedHTTPServer((HOST, PORT), Servidor)
-    print(f" World of RPGcraft rodando em http://{HOST}:{PORT}")
-    
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\n Servidor encerrado!")
-        server.server_close()
+    print(f"World of RPGcraft (WEB) Online em http://{HOST}:{PORT}")
+    try: server.serve_forever()
+    except KeyboardInterrupt: server.server_close()

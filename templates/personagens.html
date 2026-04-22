@@ -1,39 +1,45 @@
 {% extends "base_wow.html" %}
 
-{% block title %}Meus Personagens - {{usuario}}{% endblock %}
+{% block title %}Salão dos Heróis - {{usuario}}{% endblock %}
 
 {% block content %}
-<h1 class="wow-title">Personagens de {{usuario}}</h1>
+<h1 class="wow-title"> Salão dos Heróis</h1>
 
 <div class="wow-nav">
-    <a href="/criar_personagem" class="wow-btn wow-btn-success"> Invocar Novo Herói</a>
-    <a href="/" class="wow-btn"> Salão Principal</a>
-    <a href="/config_conta" class="wow-btn"> Configurações</a>
-    <a href="/logout" class="wow-btn wow-btn-danger"> Abandonar Reino</a>
+    <a href="/criar_personagem" class="wow-btn wow-btn-success">⚔️ Criar Novo Personagem</a>
+    <a href="/grupos" class="wow-btn">🛡️ Localizador de Grupos</a> 
+    <a href="/config_conta" class="wow-btn">⚙️ Configurações da Conta</a>
+    <a href="/logout" class="wow-btn wow-btn-danger">🚪 Sair do Reino</a>
 </div>
 
-<div class="wow-card">
-    <div class="wow-card-title"> Seus Heróis</div>
+<div class="wow-subtitle">Aventureiro Logado: <span style="color: #f1d188;">{{usuario}}</span></div>
+
+<div class="wow-card wow-card-highlight">
+    <div class="wow-card-title">Seus Personagens Registrados</div>
     
-    {% if personagens %}
     <table class="wow-table">
         <thead>
             <tr>
                 <th>ID</th>
-                <th>Nome do Herói</th>
-                <th>Nível de Poder</th>
+                <th>Nome</th>
+                <th>Nível</th>
                 <th>Função</th>
-                <th>Comandos</th>
+                <th>Ações</th>
             </tr>
         </thead>
         <tbody>
             {{personagens|safe}}
         </tbody>
     </table>
-    {% else %}
-    <p style="text-align: center; color: #8b7355; padding: 40px;">
-        
-    </p>
-    {% endif %}
+
+    <div class="wow-card" style="margin-top: 20px; background: rgba(0,0,0,0.3);">
+        <p class="wow-note">
+            <strong>Dica do Mestre:</strong> A listagem acima utiliza <strong>Hash Extensível</strong> para encontrar seus personagens instantaneamente através do relacionamento 1:N.
+        </p>
+    </div>
+</div>
+
+<div class="wow-actions">
+    <a href="/" class="wow-btn">Voltar ao Início</a>
 </div>
 {% endblock %}
