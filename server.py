@@ -15,7 +15,7 @@ from dao.GrupoTempDAO import GrupoTempDAO
 HOST = "localhost"
 PORT = 8000
 
-# Instância global para persistência em memória durante a sessão
+# Instância global para persistência em memória (volátil)
 dao_grupo = GrupoTempDAO()
 
 class Servidor(BaseHTTPRequestHandler):
@@ -104,6 +104,7 @@ class Servidor(BaseHTTPRequestHandler):
                 if '|' in linha:
                     p = [part.strip() for part in linha.split('|')]
                     if len(p) >= 4:
+                        # Gera linhas para a tabela com colunas: ID, Nome, Nível, Função
                         linhas_html += f"<tr><td>{p[0]}</td><td>{p[1]}</td><td>{p[2]}</td><td>{p[3]}</td>"
                         linhas_html += f"<td><a href='/editar_personagem?id={p[0]}' class='wow-link'>✏️ Editar</a> "
                         linhas_html += f"<a href='/excluir_personagem?id={p[0]}' class='wow-link wow-link-danger' onclick='return confirm(\"Excluir?\");'>🗑️ Excluir</a></td></tr>"
@@ -114,7 +115,7 @@ class Servidor(BaseHTTPRequestHandler):
     def do_GET(self):
         usuario_logado = self._get_usuario_logado()
         url_parseada = urllib.parse.urlparse(self.path)
-        # Normalização do caminho para evitar erros 404 com barras extras
+        # CORREÇÃO DO ERRO 404: Normalização do caminho
         caminho = url_parseada.path.rstrip('/') or '/'
         params = urllib.parse.parse_qs(url_parseada.query)
 
@@ -134,7 +135,7 @@ class Servidor(BaseHTTPRequestHandler):
             self.send_error(404)
             return
 
-        # Roteamento
+        # Roteamento de Páginas
         if caminho == "/":
             self.send_response(200)
             self.end_headers()
@@ -151,7 +152,7 @@ class Servidor(BaseHTTPRequestHandler):
             })
             self.wfile.write(html.encode())
 
-        # --- SISTEMA DE GRUPOS (FASE 2) ---
+        # --- SISTEMA DE GRUPOS ---
         
         elif caminho == "/grupos":
             if not usuario_logado: return self._redirect("/login")
@@ -221,7 +222,7 @@ class Servidor(BaseHTTPRequestHandler):
             self.end_headers()
             html = self._render_template('criar_grupo_selecao.html', {
                 'usuario': usuario_logado['usuario'],
-                'id_grupo': 0, # Indica que é criação
+                'id_grupo': 0, # Indica que é criação de novo grupo
                 'personagens': self._gerar_linhas_personagens(usuario_logado['id'])
             })
             self.wfile.write(html.encode())
