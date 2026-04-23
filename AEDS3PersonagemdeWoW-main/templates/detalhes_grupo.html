@@ -1,0 +1,31 @@
+{% extends "base_wow.html" %}
+
+{% block title %}Detalhes do Grupo - World of RPGcraft{% endblock %}
+
+{% block content %}
+<h1 class="wow-title">Detalhes do Grupo #{{id_grupo}}</h1>
+
+<div style="max-width: 900px; margin: 0 auto;">
+    <div class="wow-card wow-card-highlight">
+        <div class="wow-card-title">Membros do Grupo</div>
+        <table class="wow-table">
+            <thead>
+                <tr>
+                    <th>Usuario</th>
+                    <th>Personagem ID</th>
+                    <th>Nome</th>
+                    <th>Funcao</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{linhas_membros|safe}}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="wow-actions">
+    <a href="/grupos" class="wow-btn">Voltar para Grupos</a>
+    <a href="/personagens" class="wow-btn">Meus Personagens</a>
+</div>
+{% endblock %}

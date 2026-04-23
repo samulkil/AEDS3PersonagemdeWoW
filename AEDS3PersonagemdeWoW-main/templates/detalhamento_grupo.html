@@ -1,0 +1,46 @@
+{% extends "base_wow.html" %}
+
+{% block title %}Membros do Grupo #{{id_grupo}}{% endblock %}
+
+{% block content %}
+<h1 class="wow-title"> Grupo Temporário #{{id_grupo}}</h1>
+
+<div class="wow-nav">
+    <a href="/grupos" class="wow-link">🔙 Voltar para a Lista de Grupos</a>
+</div>
+
+<div style="max-width: 900px; margin: 0 auto;">
+    <div class="wow-card wow-card-highlight">
+        <div class="wow-card-title">Aventureiros Reunidos</div>
+        
+        <p class="wow-note" style="margin-bottom: 20px;">
+            Este grupo é temporário e volátil. A composição ideal é de 1 Tanque, 1 Suporte e 3 Danos.
+        </p>
+
+        <table class="wow-table">
+            <thead>
+                <tr>
+                    <th>ID Conta</th>
+                    <th>ID Personagem</th>
+                    <th>Nome do Aventureiro</th>
+                    <th>Função no Grupo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{linhas_membros|safe}}
+            </tbody>
+        </table>
+
+        <div class="wow-actions" style="margin-top: 30px;">
+            <a href="/grupos" class="wow-btn">Localizar Outros Grupos</a>
+            <a href="/personagens" class="wow-btn wow-btn-success">Meus Personagens</a>
+        </div>
+    </div>
+</div>
+
+<div class="wow-card" style="margin-top: 20px; border-left: 4px solid #c9a84c;">
+    <p class="wow-note">
+        <strong>Dica:</strong> Se o grupo ainda não estiver cheio, podes convidar outros aventureiros partilhando o ID <strong>#{{id_grupo}}</strong>.
+    </p>
+</div>
+{% endblock %}
