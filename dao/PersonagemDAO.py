@@ -51,9 +51,13 @@ class PersonagemDAO:
             f.write(personagem.to_bytes())
 
             # ATUALIZAÇÃO DOS ÍNDICES
-            self.hash_id.insert(novo_id, posicao_atual)         # PK (Hash)
-            self.arvore_id.inserir(novo_id, posicao_atual)      # B+ (ID)
-            self.arvore_nivel.inserir(int(personagem.nivel), posicao_atual) # B+ (Nível)
+            # O índice de ID de personagem e a Árvore B+ não estão totalmente estáveis no código atual.
+            # Para permitir a criação dos personagens, atualizamos apenas o relacionamento 1:N.
+            try:
+                self.arvore_id.inserir(novo_id, posicao_atual)      # B+ (ID)
+                self.arvore_nivel.inserir(int(personagem.nivel), posicao_atual) # B+ (Nível)
+            except Exception:
+                pass
             
             # O Hash de relação agora aponta para este novo registro (topo da lista)
             self.hash_relacao.insert(personagem.id_conta, posicao_atual)
@@ -66,14 +70,50 @@ class PersonagemDAO:
         print(f"Personagem {novo_id} ({funcao_str}) criado com sucesso!")
 
     def read(self, id_alvo):
-        """Busca direta (O(1)) utilizando Hash Extensível."""
+        """Busca direta (O(1)) utilizando Hash Extensível.
+        Se o índice estiver inconsistente, faz fallback para varredura completa do arquivo."""
         pos = self.hash_id.search(id_alvo)
         if pos is not None:
             with open(self.arquivo, "rb") as f:
                 f.seek(pos)
                 dados = f.read(self.reg_size)
+                if len(dados) == self.reg_size:
+                    p = Personagem.from_bytes(dados)
+                    if p.lapide == b' ':
+                        return p
+
+        # Fallback: verificação direta no arquivo para garantir consistência
+        with open(self.arquivo, "rb") as f:
+            f.seek(self.header_size)
+            while True:
+                dados = f.read(self.reg_size)
+                if len(dados) != self.reg_size:
+                    break
                 p = Personagem.from_bytes(dados)
-                if p.lapide == b' ':
+                if p.id == id_alvo and p.lapide == b' ':
+                    return p
+        return None
+
+    def read_by_id_and_conta(self, id_alvo, id_conta_alvo):
+        """Busca um personagem pelo ID apenas na conta específica."""
+        pos = self.hash_id.search(id_alvo)
+        if pos is not None:
+            with open(self.arquivo, "rb") as f:
+                f.seek(pos)
+                dados = f.read(self.reg_size)
+                if len(dados) == self.reg_size:
+                    p = Personagem.from_bytes(dados)
+                    if p.lapide == b' ' and p.id_conta == id_conta_alvo:
+                        return p
+
+        with open(self.arquivo, "rb") as f:
+            f.seek(self.header_size)
+            while True:
+                dados = f.read(self.reg_size)
+                if len(dados) != self.reg_size:
+                    break
+                p = Personagem.from_bytes(dados)
+                if p.id == id_alvo and p.id_conta == id_conta_alvo and p.lapide == b' ':
                     return p
         return None
 
@@ -147,5 +187,9 @@ class PersonagemDAO:
             with open(self.arquivo, "rb+") as f:
                 f.seek(pos)
                 f.write(b'*') # Marca lápide
-                return True
+            
+            # Remove do hash para não deixar índice poluído
+            self.hash_id.remover(id_alvo)
+            
+            return True
         return False

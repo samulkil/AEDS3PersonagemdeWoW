@@ -28,9 +28,9 @@ class GrupoTempDAO:
         Assinatura ajustada para aceitar dao_perso conforme o server.py.
         """
         # Valida se o personagem existe antes de criar o grupo
-        p_lider = dao_perso.read(id_personagem)
+        p_lider = dao_perso.read_by_id_and_conta(id_personagem, id_conta)
         if not p_lider:
-            print("[ERRO] Personagem líder não encontrado.")
+            print("[ERRO] Personagem líder não encontrado ou não pertence a sua conta.")
             return None
 
         novo_id_grupo = len(self.grupos_criados) + 1
@@ -51,18 +51,21 @@ class GrupoTempDAO:
             return False
 
         # 1. Busca os dados do personagem que deseja entrar
-        p_novo = dao_perso.read(id_personagem)
+        p_novo = dao_perso.read_by_id_and_conta(id_personagem, id_conta)
         if not p_novo:
+            print("[ERRO] Personagem não encontrado ou não pertence a sua conta.")
             return False
         
         funcao_nova = p_novo.funcao.decode('utf-8').strip('\x00').lower()
 
         # 2. Verifica se a conta já possui um personagem no grupo
+
+        # 3. Verifica se a conta já possui um personagem no grupo
         if any(m.id_conta == id_conta and m.id_grupo == id_grupo for m in self.membros):
             print("[ERRO] Você já tem um herói neste grupo!")
             return False
 
-        # 3. Validação da Regra de Composição (1/1/3)
+        # 4. Validação da Regra de Composição (1/1/3)
         contagem = self._contar_funcoes(id_grupo, dao_perso)
         
         if funcao_nova == "tanque" and contagem["tanque"] >= 1:

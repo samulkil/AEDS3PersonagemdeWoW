@@ -9,6 +9,22 @@
     <link rel="stylesheet" href="/static/css/componentes.css"> 
     <link rel="stylesheet" href="/static/css/layouts.css">
     <link rel="stylesheet" href="/static/css/definicoes.css">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+        }
+        .wow-hud {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+        .wow-container {
+            margin-top: 84px;
+        }
+    </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -21,7 +37,10 @@
     <header class="wow-hud">
         <div class="wow-hud-inner">
             <div class="wow-hud-brand">WORLD OF RPGCRAFT</div>
-            <div class="wow-hud-status">Realm Online | Legacy Interface v1.0</div>
+
+            <div class="wow-hud-status">
+                <a href="/arvore_bplus" class="wow-btn">🌳</a>
+            </div>
             
         </div>
     </header>

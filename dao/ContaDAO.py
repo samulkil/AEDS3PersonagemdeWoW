@@ -9,7 +9,12 @@ class ContaDAO:
         self.header_fmt = "<i"
         self.header_size = struct.calcsize(self.header_fmt)
         self.reg_size = struct.calcsize(Conta.FORMATO)
+        
+        # Hash por ID (PK)
         self.hash = HashExtensivel("dados/index_contas")
+        
+        # Hash por nome de usuário (chave secundária)
+        self.hash_usuario = HashExtensivel("dados/index_contas_usuario")
         
         if not os.path.exists(self.arquivo):
             os.makedirs(os.path.dirname(self.arquivo), exist_ok=True)
@@ -26,7 +31,13 @@ class ContaDAO:
             f.seek(0, 2)
             pos = f.tell()
             f.write(conta.to_bytes())
+            
+            # Insere no hash por ID
             self.hash.insert(novo_id, pos)
+            
+            # Insere no hash por nome de usuário (chave secundária)
+            nome_usuario = conta.usuario.decode('utf-8').strip('\x00')
+            self.hash_usuario.insert(nome_usuario, pos)
 
             f.seek(0)
             f.write(struct.pack(self.header_fmt, novo_id))
@@ -47,40 +58,68 @@ class ContaDAO:
         return None
 
     def read_por_usuario(self, nome_usuario):
-        with open(self.arquivo, "rb") as f:
-            f.seek(self.header_size)
-            while True:
-                posicao_atual = f.tell()
-                lapide = f.read(1)
-                if not lapide: break
+        """Busca por nome de usuário usando hash secundário."""
+        posicao = self.hash_usuario.search(nome_usuario)
+        if posicao is not None:
+            with open(self.arquivo, "rb") as f:
+                f.seek(posicao)
+                dados = f.read(self.reg_size)
+                if not dados: return None
                 
-                dados = f.read(self.reg_size - 1)
-                usuario_lido = struct.unpack("<20s", dados[4:24])[0]
-                usuario_limpo = usuario_lido.decode('utf-8').strip('\x00')
-
-                if usuario_limpo == nome_usuario and lapide == b' ':
-                    f.seek(posicao_atual)
-                    return Conta.from_bytes(f.read(self.reg_size))
+                conta = Conta.from_bytes(dados)
+                if conta.lapide == b' ':
+                    return conta
         return None
     
     def update(self, id_alvo, conta_atualizada):
         pos = self.hash.search(id_alvo)
-        if pos is not None: # Verifica se a posição foi encontrada
+        if pos is not None:
+            # Lê a conta antiga para obter o nome antigo
+            with open(self.arquivo, "rb") as f:
+                f.seek(pos)
+                dados = f.read(self.reg_size)
+                conta_antiga = Conta.from_bytes(dados)
+                nome_antigo = conta_antiga.usuario.decode('utf-8').strip('\x00')
+            
             with open(self.arquivo, "rb+") as f:
-                f.seek(pos) # VAI PARA A POSIÇÃO CORRETA INDICADA PELO HASH
-                # Escreve os novos bytes da conta diretamente por cima dos antigos
+                f.seek(pos)
                 f.write(conta_atualizada.to_bytes())
-                return True
+            
+            # Atualiza o hash por ID (mesmo offset)
+            self.hash.insert(id_alvo, pos)
+            
+            # Atualiza o hash por nome de usuário
+            nome_novo = conta_atualizada.usuario.decode('utf-8').strip('\x00')
+            if nome_antigo != nome_novo:
+                # Remove o índice antigo e insere o novo
+                self.hash_usuario.remover(nome_antigo)
+                self.hash_usuario.insert(nome_novo, pos)
+            
+            return True
         return False
     
     def delete(self, id_alvo):
         posicao = self.hash.search(id_alvo)
         if posicao is not None:
+            # Lê a conta para obter o nome de usuário antes de excluir
+            with open(self.arquivo, "rb") as f:
+                f.seek(posicao)
+                dados = f.read(self.reg_size)
+                conta = Conta.from_bytes(dados)
+                nome_usuario = conta.usuario.decode('utf-8').strip('\x00')
+            
             with open(self.arquivo, "rb+") as f:
-                f.seek(posicao) # Pula direto para o registro
-                f.write(b'*')   # Marca a lápide na primeira posição do registro
-                print(f"Conta ID {id_alvo} excluída com sucesso!")
-                return True
+                f.seek(posicao)
+                f.write(b'*')   # Marca a lápide
+            
+            # Remove do hash por ID
+            self.hash.remover(id_alvo)
+            
+            # Remove do hash por nome de usuário
+            self.hash_usuario.remover(nome_usuario)
+            
+            print(f"Conta ID {id_alvo} excluída com sucesso!")
+            return True
         return False
 
     import os

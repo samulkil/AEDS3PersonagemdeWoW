@@ -13,7 +13,7 @@ from model.Personagem import Personagem
 from dao.GrupoTempDAO import GrupoTempDAO
 
 HOST = "localhost"
-PORT = 8000
+PORT = 8001
 
 # Instância global para persistência em memória (volátil)
 dao_grupo = GrupoTempDAO()
@@ -110,6 +110,94 @@ class Servidor(BaseHTTPRequestHandler):
                         linhas_html += f"<a href='/excluir_personagem?id={p[0]}' class='wow-link wow-link-danger' onclick='return confirm(\"Excluir?\");'>🗑️ Excluir</a></td></tr>"
         return linhas_html
 
+    def _gerar_visualizacao_bplus_id(self):
+        """Monta uma visualização textual da Árvore B+ (índice por ID)."""
+        try:
+            dao = PersonagemDAO()
+            arvore = dao.arvore_id
+            raiz = arvore._ler_raiz()
+            if raiz == -1:
+                return "<p class='wow-note'>Árvore B+ vazia.</p>"
+
+            html = []
+            fila = [(raiz, 0)]
+            visitados = set()
+            niveis = {}
+
+            while fila:
+                offset, nivel = fila.pop(0)
+                if offset in visitados:
+                    continue
+                visitados.add(offset)
+
+                no = arvore._ler_no(offset)
+                tipo = "Folha" if no.eh_folha else "Interno"
+                chaves = ", ".join(str(c) for c in no.chaves) if no.chaves else "vazio"
+                prox = f" | prox: {no.proximo}" if no.eh_folha else ""
+                cartao = f"<div class='wow-card' style='min-width: 220px; margin: 6px;'><strong>{tipo}</strong><br>off: {offset}<br>chaves: [{chaves}]{prox}</div>"
+                niveis.setdefault(nivel, []).append(cartao)
+
+                if not no.eh_folha:
+                    for filho in no.ponteiros:
+                        if filho not in (None, -1, 0):
+                            fila.append((filho, nivel + 1))
+
+            html.append("<div style='display:flex; flex-direction:column; gap:10px;'>")
+            for nivel in sorted(niveis.keys()):
+                html.append(f"<div><div class='wow-note' style='margin-bottom:4px;'><strong>Nível {nivel}</strong></div>")
+                html.append("<div style='display:flex; flex-wrap:wrap;'>")
+                html.extend(niveis[nivel])
+                html.append("</div></div>")
+            html.append("</div>")
+
+            # Cadeia de folhas (ordem da esquerda para direita)
+            no = arvore._ler_no(raiz)
+            while not no.eh_folha and no.ponteiros:
+                no = arvore._ler_no(no.ponteiros[0])
+
+            folhas = []
+            while no:
+                folhas.append("[" + ", ".join(str(c) for c in no.chaves) + "]")
+                if no.proximo in (-1, None):
+                    break
+                no = arvore._ler_no(no.proximo)
+
+            if folhas:
+                html.append("<div class='wow-card' style='margin-top:10px;'>")
+                html.append("<div class='wow-note'><strong>Encadeamento das folhas:</strong> " + " → ".join(folhas) + "</div>")
+                html.append("</div>")
+
+            return "".join(html)
+        except Exception as e:
+            return f"<p class='wow-note'>Não foi possível renderizar a Árvore B+: {e}</p>"
+
+    def _gerar_linhas_personagens_selecao_grupo(self, id_conta):
+        """Gera linhas de seleção com radio pronto para criar/entrar em grupo."""
+        dao = PersonagemDAO()
+        import io, sys
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        dao.listar_por_conta(id_conta)
+        output = sys.stdout.getvalue()
+        sys.stdout = old_stdout
+
+        linhas_html = ""
+        if output.strip():
+            for linha in output.strip().split('\n'):
+                if '|' not in linha:
+                    continue
+                p = [part.strip() for part in linha.split('|')]
+                if len(p) >= 4:
+                    try:
+                        id_p = int(p[0])
+                    except ValueError:
+                        continue
+                    linhas_html += (
+                        f"<tr><td><input type='radio' name='id_p' value='{id_p}' required></td>"
+                        f"<td>{id_p}</td><td>{p[1]}</td><td>{p[3]}</td></tr>"
+                    )
+        return linhas_html
+
     # --- ROTAS GET ---
 
     def do_GET(self):
@@ -152,9 +240,19 @@ class Servidor(BaseHTTPRequestHandler):
             })
             self.wfile.write(html.encode())
 
+        elif caminho == "/arvore_bplus":
+            if not usuario_logado: return self._redirect("/login")
+            self.send_response(200)
+            self.end_headers()
+            html = self._render_template('arvore_bplus.html', {
+                'usuario': usuario_logado['usuario'],
+                'visualizacao_bplus': self._gerar_visualizacao_bplus_id()
+            })
+            self.wfile.write(html.encode())
+
         # --- SISTEMA DE GRUPOS ---
         
-        elif caminho == "/grupos":
+        elif caminho == "/grupos" or caminho == "/group":
             if not usuario_logado: return self._redirect("/login")
             self.send_response(200)
             self.end_headers()
@@ -167,7 +265,7 @@ class Servidor(BaseHTTPRequestHandler):
                                   <a href='/detalhes_grupo?id={id_g}' class='wow-btn'>Ver Detalhes</a>
                                   <a href='/selecionar_personagem_grupo?id={id_g}' class='wow-btn wow-btn-success'>Entrar</a></div></div>"""
             
-            html = self._render_template('grupos.html', {
+            html = self._render_template('group.html', {
                 'usuario': usuario_logado['usuario'], 
                 'lista_grupos': lista_html or "<p>Nenhum grupo ativo no momento.</p>"
             })
@@ -175,17 +273,23 @@ class Servidor(BaseHTTPRequestHandler):
 
         elif caminho == "/detalhes_grupo":
             if not usuario_logado: return self._redirect("/login")
-            id_g = int(params.get('id', [0])[0])
+            try:
+                id_g = int(params.get('id', [0])[0])
+            except (ValueError, TypeError):
+                return self._render_mensagem("ID inválido", "Informe um ID de grupo válido para ver os detalhes.", "/grupos", "Voltar")
             membros = dao_grupo.listar_membros_do_grupo(id_g)
             
             linhas = ""
             dao_p = PersonagemDAO()
+            dao_c = ContaDAO()
             for m in membros:
                 p = dao_p.read(m.id_personagem) # Busca via Hash PK
                 if p:
                     f_str = p.funcao.decode().strip('\x00')
                     n_str = p.nome.decode().strip('\x00')
-                    linhas += f"<tr><td>{m.id_conta}</td><td>{m.id_personagem}</td><td>{n_str}</td><td>{f_str}</td></tr>"
+                    conta = dao_c.read(m.id_conta)
+                    usuario = conta.usuario if conta else f"Conta {m.id_conta}"
+                    linhas += f"<tr><td>{usuario}</td><td>{m.id_personagem}</td><td>{n_str}</td><td>{f_str}</td></tr>"
             
             self.send_response(200)
             self.end_headers()
@@ -200,21 +304,16 @@ class Servidor(BaseHTTPRequestHandler):
             html = self._render_template('criar_grupo_selecao.html', {
                 'usuario': usuario_logado['usuario'],
                 'id_grupo': id_g,
-                'personagens': self._gerar_linhas_personagens(usuario_logado['id'])
+                'personagens': self._gerar_linhas_personagens_selecao_grupo(usuario_logado['id']),
+                'titulo_grupo': f"Juntar-se ao Grupo #{id_g}",
+                'form_action': f"/entrar_no_grupo_final?id_g={id_g}"
             })
             self.wfile.write(html.encode())
 
         elif caminho == "/entrar_no_grupo_final":
             if not usuario_logado: return self._redirect("/login")
-            id_g = int(params.get('id_g', [0])[0])
-            id_p = int(params.get('id_p', [0])[0])
-            
-            dao_p = PersonagemDAO()
-            # Validação da regra 1 Tanque / 1 Suporte / 3 Danos
-            if dao_grupo.adicionar_ao_grupo(id_g, usuario_logado['id'], id_p, dao_p):
-                self._redirect(f"/detalhes_grupo?id={id_g}")
-            else:
-                self._render_mensagem("Erro de Composição!", "O grupo não pode aceitar este personagem (Limite atingido ou você já está no grupo).", "/grupos", "Voltar")
+            # Esta rota é processada via POST (formulário). Em GET, apenas redireciona.
+            self._redirect("/grupos")
 
         elif caminho == "/criar_grupo_web":
             if not usuario_logado: return self._redirect("/login")
@@ -223,7 +322,9 @@ class Servidor(BaseHTTPRequestHandler):
             html = self._render_template('criar_grupo_selecao.html', {
                 'usuario': usuario_logado['usuario'],
                 'id_grupo': 0, # Indica que é criação de novo grupo
-                'personagens': self._gerar_linhas_personagens(usuario_logado['id'])
+                'personagens': self._gerar_linhas_personagens_selecao_grupo(usuario_logado['id']),
+                'titulo_grupo': "Iniciar Nova Jornada",
+                'form_action': "/processar_criacao_grupo"
             })
             self.wfile.write(html.encode())
 
@@ -278,6 +379,32 @@ class Servidor(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(self._render_template('criar_personagem.html', {'usuario': usuario_logado['usuario']}).encode())
 
+        elif caminho == "/config_conta":
+            if not usuario_logado: return self._redirect("/login")
+            dao = ContaDAO()
+            conta = dao.read(usuario_logado['id'])
+            if not conta:
+                return self._render_mensagem("Conta não encontrada", "Não foi possível carregar suas configurações.", "/personagens", "Voltar")
+            self.send_response(200)
+            self.end_headers()
+            html = self._render_template('config_conta.html', {
+                'id': conta.id,
+                'usuario': conta.usuario,
+                'email': conta.email,
+                'data': conta.data
+            })
+            self.wfile.write(html.encode())
+
+        elif caminho == "/confirmar_excluir_conta":
+            if not usuario_logado: return self._redirect("/login")
+            self.send_response(200)
+            self.end_headers()
+            html = self._render_template('confirmar_excluir_conta.html', {
+                'usuario': usuario_logado['usuario'],
+                'id': usuario_logado['id']
+            })
+            self.wfile.write(html.encode())
+
         else: self.send_error(404)
 
     # --- ROTAS POST ---
@@ -328,8 +455,32 @@ class Servidor(BaseHTTPRequestHandler):
             if not usuario_logado: return self._redirect("/login")
             id_p = int(parametros.get("id_p", [0])[0])
             dao_p = PersonagemDAO()
+            p = dao_p.read(id_p)
+            if not p or p.id_conta != usuario_logado['id']:
+                return self._render_mensagem("Acesso Negado", "Escolha um personagem da sua conta para criar o grupo.", "/criar_grupo_web", "Voltar")
             id_g = dao_grupo.criar_grupo_automatico(usuario_logado['id'], id_p, dao_p)
-            self._redirect(f"/detalhes_grupo?id={id_g}")
+            if id_g:
+                self._redirect(f"/detalhes_grupo?id={id_g}")
+            else:
+                self._render_mensagem("Erro ao criar grupo", "Personagem inválido para liderança do grupo.", "/grupos", "Voltar")
+
+        elif caminho == "/entrar_no_grupo_final":
+            if not usuario_logado: return self._redirect("/login")
+
+            id_g = int(urllib.parse.parse_qs(url_parseada.query).get('id_g', [0])[0])
+            id_p = int(parametros.get("id_p", [0])[0])
+            dao_p = PersonagemDAO()
+
+            # Garante que o personagem escolhido pertence ao usuário logado
+            p = dao_p.read(id_p)
+            if not p or p.id_conta != usuario_logado['id']:
+                return self._render_mensagem("Acesso Negado", "Você só pode entrar no grupo com personagens da sua conta.", "/grupos", "Voltar")
+
+            # Validação da regra 1 Tanque / 1 Suporte / 3 Danos
+            if dao_grupo.adicionar_ao_grupo(id_g, usuario_logado['id'], id_p, dao_p):
+                self._redirect(f"/detalhes_grupo?id={id_g}")
+            else:
+                self._render_mensagem("Erro de Composição!", "O grupo não pode aceitar este personagem (limite de função ou conta já presente).", "/grupos", "Voltar")
 
         elif caminho == "/excluir_conta":
             if not usuario_logado: return self._redirect("/login")
@@ -338,6 +489,17 @@ class Servidor(BaseHTTPRequestHandler):
             self.send_header('Location', '/')
             self.send_header('Set-Cookie', 'id_conta=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT')
             self.end_headers()
+
+        elif caminho == "/atualizar_conta":
+            if not usuario_logado: return self._redirect("/login")
+            email = parametros.get("email", [""])[0]
+            data = parametros.get("data", [""])[0]
+            dao = ContaDAO()
+            conta = dao.read(usuario_logado['id'])
+            if conta:
+                conta_atualizada = Conta(conta.id, conta.usuario, email, data)
+                dao.update(conta.id, conta_atualizada)
+            self._redirect("/config_conta")
 
     # --- AUXILIARES ---
     

@@ -1,0 +1,46 @@
+{% extends "base_wow.html" %}
+
+{% block title %}Grupos Temporarios - World of RPGcraft{% endblock %}
+
+{% block content %}
+<h1 class="wow-title">Gerenciar Grupos Temporarios</h1>
+
+<div class="wow-subtitle">
+    Aventureiro: <span style="color: #f1d188;">{{usuario}}</span>
+</div>
+
+<div class="wow-card wow-card-highlight" style="max-width: 900px; margin: 20px auto;">
+    <div class="wow-card-title">Criar um Grupo</div>
+    <p class="wow-note">Junte com seus amigos para enfrentar desafios juntos!</p>
+
+    <div class="wow-actions" style="justify-content: flex-start; margin-bottom: 10px;">
+        <a href="/criar_grupo_web" class="wow-btn wow-btn-success">1. Criar um Grupo</a>
+    </div>
+
+    
+</div>
+
+<div style="max-width: 900px; margin: 0 auto;">
+    <div class="wow-card-title">Grupos Ativos em Memoria</div>
+    <div class="wow-groups-container">
+        {{lista_grupos|safe}}
+    </div>
+</div>
+
+<hr class="wow-divider">
+
+<div class="wow-card" style="margin-top: 24px; border-color: #7a4e2c;">
+    <div class="wow-card-title" style="color: #c9a84c;">Regras de Composicao</div>
+    <ul class="wow-list">
+        <li><strong>Limite:</strong> ate 5 personagens por grupo.</li>
+        <li><strong>Funcoes:</strong> 1 tanque, 1 suporte e 3 dano.</li>
+        <li><strong>Restricao:</strong> a mesma conta nao entra duas vezes no mesmo grupo.</li>
+        <li><strong>Volatil:</strong> dados em RAM (reiniciar servidor limpa os grupos).</li>
+    </ul>
+</div>
+
+<div class="wow-actions">
+    <a href="/personagens" class="wow-btn">Meus Personagens</a>
+    <a href="/" class="wow-btn">Voltar ao Inicio</a>
+</div>
+{% endblock %}
