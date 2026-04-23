@@ -1,0 +1,15 @@
+{% extends "base_wow.html" %}
+
+{% block title %}{{titulo}} - World of RPGcraft{% endblock %}
+
+{% block content %}
+<h1 class="wow-title">{{titulo}}</h1>
+
+<div style="text-align: center; margin: 50px 0;">
+    <div class="wow-card" style="max-width: 500px; margin: 0 auto;">
+        <p style="font-size: 1.2em; margin: 30px 0;">{{mensagem}}</p>
+        
+        <a href="{{link}}" class="wow-btn">{{link_texto}}</a>
+    </div>
+</div>
+{% endblock %}
