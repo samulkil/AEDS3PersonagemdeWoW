@@ -32,9 +32,9 @@ def menu_grupos(id_conta_logada):
             dao_perso.listar_por_conta(id_conta_logada)
             try:
                 id_p = int(input("Digite o ID do Personagem: "))
-                p_check = dao_perso.read(id_p)
-                if p_check and p_check.id_conta == id_conta_logada:
-                    novo_id = dao_grupo_memoria.criar_grupo_automatico(id_conta_logada, id_p)
+                p_check = dao_perso.read_by_id_and_conta(id_p, id_conta_logada)
+                if p_check:
+                    novo_id = dao_grupo_memoria.criar_grupo_automatico(id_conta_logada, id_p, dao_perso)
                 else:
                     print("[Erro] Personagem inválido ou não pertence a você.")
             except ValueError:
@@ -45,7 +45,8 @@ def menu_grupos(id_conta_logada):
                 id_g = int(input("ID do grupo para entrar: "))
                 dao_perso.listar_por_conta(id_conta_logada)
                 id_p = int(input("ID do seu Personagem: "))
-                dao_grupo_memoria.adicionar_ao_grupo(id_g, id_conta_logada, id_p)
+                # CORREÇÃO: Passando dao_perso para validar a regra 1/1/3
+                dao_grupo_memoria.adicionar_ao_grupo(id_g, id_conta_logada, id_p, dao_perso)
             except ValueError:
                 print("[Erro] Entrada inválida.")
 
@@ -56,7 +57,9 @@ def menu_grupos(id_conta_logada):
                 if membros:
                     print(f"\n--- Membros do Grupo {id_g} ({len(membros)}/5) ---")
                     for m in membros:
-                        print(f"Conta ID: {m.id_conta} | Personagem ID: {m.id_personagem}")
+                        p = dao_perso.read(m.id_personagem)
+                        f_str = p.funcao.decode().strip('\x00') if p else "???"
+                        print(f"ID Personagem: {m.id_personagem} | Função: {f_str}")
                 else:
                     print("\nGrupo não encontrado ou vazio.")
             except ValueError:
@@ -86,7 +89,10 @@ def menu_personagens(id_conta_logada, nome_usuario):
             nome = input("Nome do personagem: ")
             nivel = float(input("Nível inicial: "))
             
+<<<<<<< Updated upstream
             # Validação do novo atributo "Função"
+=======
+>>>>>>> Stashed changes
             while True:
                 funcao = input("Função (dano, tanque, suporte): ").lower()
                 if funcao in ["dano", "tanque", "suporte"]:
@@ -110,7 +116,11 @@ def menu_personagens(id_conta_logada, nome_usuario):
         elif op == "3":
             try:
                 id_busca = int(input("Digite o ID (Busca B+): "))
+<<<<<<< Updated upstream
                 p = dao_perso.read_bplus(id_busca)
+=======
+                p = dao_perso.read_bplus(id_busca) # Busca via B+
+>>>>>>> Stashed changes
                 if p and p.id_conta == id_conta_logada:
                     print(f"\n[B+] ID: {p.id} | Nome: {p.nome} | Nível: {p.nivel}")
                 else:
@@ -120,8 +130,13 @@ def menu_personagens(id_conta_logada, nome_usuario):
                 
         elif op == "4":
             try:
+<<<<<<< Updated upstream
                 nivel = float(input("Digite o nível para busca: "))
                 lista = dao_perso.buscar_por_nivel(nivel)
+=======
+                nivel = float(input("Digite o nível para busca (B+): "))
+                lista = dao_perso.buscar_por_nivel(nivel) # Busca indexada
+>>>>>>> Stashed changes
                 if lista:
                     print("\n--- Personagens encontrados ---")
                     for p in lista:
@@ -134,6 +149,10 @@ def menu_personagens(id_conta_logada, nome_usuario):
         elif op == "5":
             print(f"\n{'ID':<5} | {'Nome':<20} | {'Nível':<10} | {'Função':<10}")
             print("-" * 55)
+<<<<<<< Updated upstream
+=======
+            # Relacionamento 1:N via Hash Extensível
+>>>>>>> Stashed changes
             dao_perso.listar_por_conta(id_conta_logada)
 
         elif op == "6":
@@ -160,8 +179,13 @@ def menu_personagens(id_conta_logada, nome_usuario):
                 id_del = int(input("ID para excluir: "))
                 p_check = dao_perso.read(id_del)
                 if p_check and p_check.id_conta == id_conta_logada:
+<<<<<<< Updated upstream
                     dao_perso.delete(id_del)
                     print("\n[Sucesso] Excluído logicamente.")
+=======
+                    dao_perso.delete(id_del) # Exclusão lógica
+                    print("\n[Sucesso] Personagem excluído logicamente.")
+>>>>>>> Stashed changes
             except ValueError:
                 print("\n[Erro] ID inválido.")
 
@@ -221,7 +245,11 @@ def menu_contas():
             try:
                 id_c = int(input("ID para deletar: "))
                 if dao_conta.delete(id_c):
+<<<<<<< Updated upstream
                     print("Remoção concluída.")
+=======
+                    print("Exclusão concluída com sucesso.")
+>>>>>>> Stashed changes
             except ValueError: print("\nID inválido.")
 
         elif opcao == "5":
@@ -234,8 +262,13 @@ def menu_contas():
 
         elif opcao == "6":
             print("\nIniciando Ordenação Externa (Intercalação Balanceada)...")
+<<<<<<< Updated upstream
             dao_conta.ordenar_externo_usuario()
             print("Arquivo 'contas_ordenadas.bin' gerado com sucesso!")
+=======
+            dao_conta.ordenar_externo_usuario() # Ordenação por runs
+            print("Arquivo 'contas_ordenadas.bin' gerado.")
+>>>>>>> Stashed changes
 
         elif opcao == "7":
             print("Encerrando sistema...")
