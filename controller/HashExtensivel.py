@@ -3,7 +3,6 @@ import os
 
 class HashExtensivel:
     def __init__(self, nome_arquivo, capacidade_bucket=4):
-        # Nomes dos arquivos de índice
         self.nome_arq_dir = nome_arquivo + "_dir.bin"
         self.nome_arq_buckets = nome_arquivo + "_buckets.bin"
         self.capacidade = capacidade_bucket
@@ -13,26 +12,18 @@ class HashExtensivel:
         self.fmt_bucket = "<ii" + ("iq" * self.capacidade)
         self.tam_bucket = struct.calcsize(self.fmt_bucket)
 
-<<<<<<< Updated upstream
-        # Inicializa os arquivos se não existirem
-        if not os.path.exists(self.nome_arq_dir):
-=======
         if not self._arquivos_validos():
->>>>>>> Stashed changes
             self._inicializar_arquivos()
 
     def _inicializar_arquivos(self):
         """Cria o diretório inicial e o primeiro bucket."""
-        # 1. Cria o primeiro bucket (profundidade local 0, 0 registros)
         with open(self.nome_arq_buckets, "wb") as fb:
-            # Lista: [prof_local, qtd, chave1, end1, chave2, end2...]
             vazio = [0, 0] + [0, 0] * self.capacidade
             fb.write(struct.pack(self.fmt_bucket, *vazio))
         
-        # 2. Cria o diretório (profundidade global 0, aponta para bucket no offset 0)
         with open(self.nome_arq_dir, "wb") as fd:
-            fd.write(struct.pack("<i", 0)) # Profundidade Global
-            fd.write(struct.pack("<q", 0)) # Endereço do Bucket 0
+            fd.write(struct.pack("<i", 0)) # Profundidade Global 0
+            fd.write(struct.pack("<q", 0)) # Aponta para o offset 0 do arquivo de buckets
 
     def _arquivos_validos(self):
         if not os.path.exists(self.nome_arq_dir) or not os.path.exists(self.nome_arq_buckets):
@@ -73,35 +64,65 @@ class HashExtensivel:
 
     def _hash(self, chave, profundidade):
         """Calcula o índice usando os bits menos significativos."""
+        if isinstance(chave, str):
+            # Para strings, usa hash nativo e pega o módulo
+            # Usa abs para garantir positivo e limita ao range de int
+            return abs(hash(chave)) % (2 ** profundidade)
+        elif isinstance(chave, bytes):
+            # Para bytes, decodifica e usa hash
+            return abs(hash(chave.decode('utf-8'))) % (2 ** profundidade)
         return chave % (2 ** profundidade)
+    
+    def _normalizar_chave(self, chave):
+        """Converte a chave para formato hashável."""
+        if isinstance(chave, str):
+            return chave
+        elif isinstance(chave, bytes):
+            return chave.decode('utf-8')
+        return chave
 
     def search(self, chave):
         """Realiza a busca direta por uma chave."""
         if not os.path.exists(self.nome_arq_dir): return None
 
+        # Normaliza a chave para busca (mesma lógica do insert)
+        if isinstance(chave, str):
+            chave_busca = abs(hash(chave)) % (2**31)
+        else:
+            chave_busca = chave
+
         with open(self.nome_arq_dir, "rb") as fd, open(self.nome_arq_buckets, "rb") as fb:
             prof_global = self._get_prof_global(fd)
             indice_dir = self._hash(chave, prof_global)
             
-            # Localiza o endereço do bucket no diretório
             fd.seek(4 + indice_dir * 8)
             end_bucket = struct.unpack("<q", fd.read(8))[0]
             
-            # Lê o conteúdo do bucket
             fb.seek(end_bucket)
             dados = struct.unpack(self.fmt_bucket, fb.read(self.tam_bucket))
             
             qtd = dados[1]
             conteudo = dados[2:]
             
-            # Procura a chave dentro do bucket
             for i in range(0, qtd * 2, 2):
-                if conteudo[i] == chave:
-                    return conteudo[i+1] # Retorna o offset no arquivo .bin principal
+                # Compara usando valor numérico do hash
+                chave_bucket = conteudo[i]
+                if isinstance(chave, str):
+                    # Usa a mesma transformação para comparar
+                    if abs(hash(chave)) % (2**31) == chave_bucket:
+                        return conteudo[i+1]
+                elif chave_bucket == chave_busca:
+                    return conteudo[i+1]
         return None
 
     def insert(self, chave, endereco_bin):
-        """Insere uma nova chave e seu endereço no índice."""
+        """Insere uma nova chave ou atualiza o endereço se a chave já existir."""
+        # Converte string para hash numérico para armazenamento
+        if isinstance(chave, str):
+            chave_num = abs(hash(chave)) % (2**31)  # Limita ao range de int32
+        else:
+            chave_num = chave
+            
         with open(self.nome_arq_dir, "rb+") as fd, open(self.nome_arq_buckets, "rb+") as fb:
             prof_global = self._get_prof_global(fd)
             indice_dir = self._hash(chave, prof_global)
@@ -112,23 +133,28 @@ class HashExtensivel:
             fb.seek(end_bucket)
             dados = list(struct.unpack(self.fmt_bucket, fb.read(self.tam_bucket)))
             prof_local, qtd = dados[0], dados[1]
-<<<<<<< Updated upstream
-=======
             conteudo = dados[2:]
 
             # --- CORREÇÃO: Atualiza se a chave já existe (importante para o 1:N) ---
             for i in range(0, qtd * 2, 2):
-                if conteudo[i] == chave:
+                chave_bucket = conteudo[i]
+                if isinstance(chave, str):
+                    if hash(chave) == chave_bucket:
+                        dados[2 + i + 1] = endereco_bin 
+                        fb.seek(end_bucket)
+                        fb.write(struct.pack(self.fmt_bucket, *dados))
+                        fb.flush()
+                        return True
+                elif chave_bucket == chave_num:
                     dados[2 + i + 1] = endereco_bin 
                     fb.seek(end_bucket)
                     fb.write(struct.pack(self.fmt_bucket, *dados))
                     fb.flush()
                     return True
->>>>>>> Stashed changes
 
             # Caso 1: Ainda há espaço no bucket
             if qtd < self.capacidade:
-                dados[2 + qtd*2] = chave
+                dados[2 + qtd*2] = chave_num
                 dados[2 + qtd*2 + 1] = endereco_bin
                 dados[1] += 1
                 fb.seek(end_bucket)
@@ -143,20 +169,13 @@ class HashExtensivel:
                     prof_global += 1
                 
                 self._split_bucket(fb, fd, end_bucket, prof_global)
-                # Tenta inserir novamente após a redistribuição
                 return self.insert(chave, endereco_bin)
 
     def _duplicar_diretorio(self, fd):
-        """Dobra o tamanho do diretório quando prof_local == prof_global."""
+        """Dobra o tamanho do diretório no disco."""
         fd.seek(0)
         prof_global = struct.unpack("<i", fd.read(4))[0]
         
-<<<<<<< Updated upstream
-        fd.seek(4)
-        enderecos_atuais = [struct.unpack("<q", fd.read(8))[0] for _ in range(2**prof_global)]
-        
-        # O novo diretório é o dobro, espelhando os endere
-=======
         enderecos = []
         for _ in range(2**prof_global):
             enderecos.append(struct.unpack("<q", fd.read(8))[0])
@@ -207,4 +226,76 @@ class HashExtensivel:
         # Redistribui as chaves entre os dois buckets
         for c, e in chaves_para_reindexar:
             self.insert(c, e)
->>>>>>> Stashed changes
+
+    def remover(self, chave):
+        """Remove uma chave do hash."""
+        if not os.path.exists(self.nome_arq_dir): return False
+
+        # Converte string para hash numérico (mesma lógica do insert)
+        if isinstance(chave, str):
+            chave_num = abs(hash(chave)) % (2**31)
+        else:
+            chave_num = chave
+
+        with open(self.nome_arq_dir, "rb+") as fd, open(self.nome_arq_buckets, "rb+") as fb:
+            prof_global = self._get_prof_global(fd)
+            indice_dir = self._hash(chave, prof_global)
+            
+            fd.seek(4 + indice_dir * 8)
+            end_bucket = struct.unpack("<q", fd.read(8))[0]
+            
+            fb.seek(end_bucket)
+            dados = list(struct.unpack(self.fmt_bucket, fb.read(self.tam_bucket)))
+            
+            prof_local = dados[0]
+            qtd = dados[1]
+            conteudo = dados[2:]
+            
+            # Busca a chave no bucket
+            for i in range(0, qtd * 2, 2):
+                chave_bucket = conteudo[i]
+                if isinstance(chave, str):
+                    if abs(hash(chave)) % (2**31) == chave_bucket:
+                        # Remove a entrada deslocando as outras
+                        nova_qtd = qtd - 1
+                        novo_conteudo = []
+                        
+                        for j in range(0, qtd * 2, 2):
+                            if j != i:  # Pula a chave a ser removida
+                                novo_conteudo.append(conteudo[j])
+                                novo_conteudo.append(conteudo[j+1])
+                        
+                        # Preenche o resto com zeros
+                        while len(novo_conteudo) < self.capacidade * 2:
+                            novo_conteudo.append(0)
+                            novo_conteudo.append(0)
+                        
+                        # Escreve o bucket atualizado
+                        dados_atualizados = [prof_local, nova_qtd] + novo_conteudo
+                        fb.seek(end_bucket)
+                        fb.write(struct.pack(self.fmt_bucket, *dados_atualizados))
+                        fb.flush()
+                        return True
+                elif chave_bucket == chave_num:
+                    # Remove a entrada deslocando as outras
+                    nova_qtd = qtd - 1
+                    novo_conteudo = []
+                    
+                    for j in range(0, qtd * 2, 2):
+                        if j != i:  # Pula a chave a ser removida
+                            novo_conteudo.append(conteudo[j])
+                            novo_conteudo.append(conteudo[j+1])
+                    
+                    # Preenche o resto com zeros
+                    while len(novo_conteudo) < self.capacidade * 2:
+                        novo_conteudo.append(0)
+                        novo_conteudo.append(0)
+                    
+                    # Escreve o bucket atualizado
+                    dados_atualizados = [prof_local, nova_qtd] + novo_conteudo
+                    fb.seek(end_bucket)
+                    fb.write(struct.pack(self.fmt_bucket, *dados_atualizados))
+                    fb.flush()
+                    return True
+            
+        return False

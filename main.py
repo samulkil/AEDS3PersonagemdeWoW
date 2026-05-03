@@ -74,10 +74,10 @@ def menu_personagens(id_conta_logada, nome_usuario):
         print(f" LOGADO COMO: {nome_usuario} (ID: {id_conta_logada})")
         print("="*45)
         print("1. Criar Personagem")
-        print("2. Pesquisar Personagem (Busca Linear - ID)")
+        print("2. Pesquisar Personagem (Hash Extensível - ID)")
         print("3. Pesquisar Personagem (Árvore B+ - ID)")
-        print("4. Pesquisar Personagens por Nível (B+)")
-        print("5. Listar MEUS Personagens")
+        print("4. Pesquisar Personagem por Nível (B+)")
+        print("5. Listar MEUS Personagens (Indexado 1:N)")
         print("6. Atualizar Personagem")
         print("7. Excluir Personagem (Lógica)")
         print("8. Gerenciar Grupos Temporários")
@@ -89,10 +89,6 @@ def menu_personagens(id_conta_logada, nome_usuario):
             nome = input("Nome do personagem: ")
             nivel = float(input("Nível inicial: "))
             
-<<<<<<< Updated upstream
-            # Validação do novo atributo "Função"
-=======
->>>>>>> Stashed changes
             while True:
                 funcao = input("Função (dano, tanque, suporte): ").lower()
                 if funcao in ["dano", "tanque", "suporte"]:
@@ -100,14 +96,15 @@ def menu_personagens(id_conta_logada, nome_usuario):
                 print("[Erro] Escolha uma função válida!")
 
             novo_p = Personagem(0, nome, nivel, id_conta_logada, funcao)
-            dao_perso.create(novo_p)
+            dao_perso.create(novo_p) # Sincroniza Hash e B+
 
         elif op == "2":
             try:
-                id_busca = int(input("Digite o ID do personagem: "))
-                p = dao_perso.read(id_busca)
+                id_busca = int(input("Digite o ID (Busca Hash): "))
+                p = dao_perso.read(id_busca) # Busca direta O(1) via Hash
                 if p and p.id_conta == id_conta_logada:
-                    print(f"\n[Encontrado] ID: {p.id} | Nome: {p.nome} | Função: {p.funcao}")
+                    funcao_str = p.funcao.decode('utf-8').strip('\x00')
+                    print(f"\n[Hash] ID: {p.id} | Nome: {p.nome.decode().strip()} | Função: {funcao_str}")
                 else:
                     print("\n[Erro] Personagem não encontrado ou acesso negado.")
             except ValueError:
@@ -116,13 +113,9 @@ def menu_personagens(id_conta_logada, nome_usuario):
         elif op == "3":
             try:
                 id_busca = int(input("Digite o ID (Busca B+): "))
-<<<<<<< Updated upstream
-                p = dao_perso.read_bplus(id_busca)
-=======
                 p = dao_perso.read_bplus(id_busca) # Busca via B+
->>>>>>> Stashed changes
                 if p and p.id_conta == id_conta_logada:
-                    print(f"\n[B+] ID: {p.id} | Nome: {p.nome} | Nível: {p.nivel}")
+                    print(f"\n[B+] ID: {p.id} | Nome: {p.nome.decode().strip()} | Nível: {p.nivel}")
                 else:
                     print("\n[Erro] Registro não encontrado na árvore.")
             except ValueError:
@@ -130,17 +123,12 @@ def menu_personagens(id_conta_logada, nome_usuario):
                 
         elif op == "4":
             try:
-<<<<<<< Updated upstream
-                nivel = float(input("Digite o nível para busca: "))
-                lista = dao_perso.buscar_por_nivel(nivel)
-=======
                 nivel = float(input("Digite o nível para busca (B+): "))
                 lista = dao_perso.buscar_por_nivel(nivel) # Busca indexada
->>>>>>> Stashed changes
                 if lista:
                     print("\n--- Personagens encontrados ---")
                     for p in lista:
-                        print(f"ID: {p.id} | Nome: {p.nome} | Nível: {p.nivel}")
+                        print(f"ID: {p.id} | Nome: {p.nome.decode().strip()} | Nível: {p.nivel}")
                 else:
                     print("\nNenhum personagem com este nível.")
             except ValueError:
@@ -149,10 +137,7 @@ def menu_personagens(id_conta_logada, nome_usuario):
         elif op == "5":
             print(f"\n{'ID':<5} | {'Nome':<20} | {'Nível':<10} | {'Função':<10}")
             print("-" * 55)
-<<<<<<< Updated upstream
-=======
             # Relacionamento 1:N via Hash Extensível
->>>>>>> Stashed changes
             dao_perso.listar_por_conta(id_conta_logada)
 
         elif op == "6":
@@ -160,15 +145,18 @@ def menu_personagens(id_conta_logada, nome_usuario):
                 id_up = int(input("ID do personagem para atualizar: "))
                 p_check = dao_perso.read(id_up)
                 if p_check and p_check.id_conta == id_conta_logada:
-                    n_nome = input(f"Novo Nome [{p_check.nome}]: ") or p_check.nome
-                    n_nivel = float(input(f"Novo Nível [{p_check.nivel}]: ") or p_check.nivel)
+                    n_nome = input(f"Novo Nome [{p_check.nome.decode().strip()}]: ") or p_check.nome.decode().strip()
+                    n_nivel = input(f"Novo Nível [{p_check.nivel}]: ")
+                    n_nivel = float(n_nivel) if n_nivel else p_check.nivel
                     
                     while True:
-                        n_funcao = input(f"Nova Função [{p_check.funcao}]: ").lower() or p_check.funcao
+                        f_atual = p_check.funcao.decode().strip('\x00')
+                        n_funcao = input(f"Nova Função [{f_atual}]: ").lower() or f_atual
                         if n_funcao in ["dano", "tanque", "suporte"]: break
                         print("[Erro] Função inválida.")
 
                     dao_perso.update(id_up, n_nome, n_nivel, id_conta_logada, n_funcao)
+                    print("\n[Sucesso] Personagem atualizado!")
                 else:
                     print("\n[Erro] Acesso negado.")
             except ValueError:
@@ -179,13 +167,8 @@ def menu_personagens(id_conta_logada, nome_usuario):
                 id_del = int(input("ID para excluir: "))
                 p_check = dao_perso.read(id_del)
                 if p_check and p_check.id_conta == id_conta_logada:
-<<<<<<< Updated upstream
-                    dao_perso.delete(id_del)
-                    print("\n[Sucesso] Excluído logicamente.")
-=======
                     dao_perso.delete(id_del) # Exclusão lógica
                     print("\n[Sucesso] Personagem excluído logicamente.")
->>>>>>> Stashed changes
             except ValueError:
                 print("\n[Erro] ID inválido.")
 
@@ -245,11 +228,7 @@ def menu_contas():
             try:
                 id_c = int(input("ID para deletar: "))
                 if dao_conta.delete(id_c):
-<<<<<<< Updated upstream
-                    print("Remoção concluída.")
-=======
                     print("Exclusão concluída com sucesso.")
->>>>>>> Stashed changes
             except ValueError: print("\nID inválido.")
 
         elif opcao == "5":
@@ -262,13 +241,8 @@ def menu_contas():
 
         elif opcao == "6":
             print("\nIniciando Ordenação Externa (Intercalação Balanceada)...")
-<<<<<<< Updated upstream
-            dao_conta.ordenar_externo_usuario()
-            print("Arquivo 'contas_ordenadas.bin' gerado com sucesso!")
-=======
             dao_conta.ordenar_externo_usuario() # Ordenação por runs
             print("Arquivo 'contas_ordenadas.bin' gerado.")
->>>>>>> Stashed changes
 
         elif opcao == "7":
             print("Encerrando sistema...")
