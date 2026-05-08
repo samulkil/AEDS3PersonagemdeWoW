@@ -109,6 +109,20 @@ class BairroDAO:
                     nome_limpo = b.nome.decode('utf-8').strip('\x00')
                     print(f"{b.id:<5} | {nome_limpo:<30} | Dono: {b.id_dono}")
 
+    def listar_todos_objetos(self):
+        """Retorna todos os bairros ativos como objetos."""
+        bairros = []
+        with open(self.arquivo, "rb") as f:
+            f.seek(self.header_size)
+            while True:
+                dados = f.read(self.reg_size)
+                if len(dados) != self.reg_size:
+                    break
+                b = Bairro.from_bytes(dados)
+                if b.lapide == b' ':
+                    bairros.append(b)
+        return bairros
+
     def buscar_por_dono(self, id_dono):
         """Busca bairros pelo ID do dono usando Árvore B+."""
         posicoes = self.arvore_dono.buscar_todos(id_dono)

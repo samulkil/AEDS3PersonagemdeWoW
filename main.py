@@ -108,7 +108,21 @@ def menu_bairros(id_conta_logada):
             print("\n" + "-"*40)
             print(f"{'ID':<5} | {'Nome':<30} | {'Dono':<5}")
             print("-"*40)
-            dao_bairro.listar_todos()
+            bairros = dao_bairro.listar_todos_objetos()
+            if not bairros:
+                print("Nenhum bairro cadastrado.")
+            for b in bairros:
+                nome_limpo = b.nome.decode('utf-8').strip('\x00')
+                # Buscar nome do usuário dono
+                p_dono = dao_perso.read(b.id_dono)
+                nome_usuario_dono = "???"
+                if p_dono:
+                    conta_dono = dao_conta.read(p_dono.id_conta)
+                    if conta_dono:
+                        nome_usuario_dono = conta_dono.usuario.decode('utf-8').strip('\x00')
+                print(f"{b.id:<5} | {nome_limpo:<30} | Dono: {nome_usuario_dono}")
+                if not dao_bairro.listar_personagens_do_bairro(b.id):
+                    print("    (Sem membros)")
 
         elif op == "3":
             try:
@@ -116,7 +130,17 @@ def menu_bairros(id_conta_logada):
                 bairro = dao_bairro.read(id_bairro)
                 if bairro:
                     nome_limpo = bairro.nome.decode('utf-8').strip('\x00')
-                    print(f"\n[B+] ID: {bairro.id} | Nome: {nome_limpo} | Dono: {bairro.id_dono}")
+                    # Buscar nome do usuário dono
+                    p_dono = dao_perso.read(bairro.id_dono)
+                    nome_usuario_dono = "???"
+                    if p_dono:
+                        conta_dono = dao_conta.read(p_dono.id_conta)
+                        if conta_dono:
+                            nome_usuario_dono = conta_dono.usuario.decode('utf-8').strip('\x00')
+                    print(f"\n[B+] ID: {bairro.id} | Nome: {nome_limpo} | Dono: {nome_usuario_dono}")
+                    print(f"\n--- Membros do Bairro '{nome_limpo}' ---")
+                    if not dao_bairro.listar_personagens_do_bairro(id_bairro):
+                        print("  (Sem membros neste bairro)")
                 else:
                     print("[Erro] Bairro não encontrado na árvore.")
             except ValueError:
@@ -127,10 +151,19 @@ def menu_bairros(id_conta_logada):
                 id_dono = int(input("\nDigite o ID do Personagem (Busca por Dono - B+): "))
                 bairros = dao_bairro.buscar_por_dono(id_dono)
                 if bairros:
-                    print(f"\n--- Bairros Pertencentes ao Personagem {id_dono} ---")
+                    # Buscar nome do usuário dono
+                    p_dono = dao_perso.read(id_dono)
+                    nome_usuario_dono = "???"
+                    if p_dono:
+                        conta_dono = dao_conta.read(p_dono.id_conta)
+                        if conta_dono:
+                            nome_usuario_dono = conta_dono.usuario.decode('utf-8').strip('\x00')
+                    print(f"\n--- Bairros Pertencentes ao Personagem {id_dono} (Usuário: {nome_usuario_dono}) ---")
                     for b in bairros:
                         nome_limpo = b.nome.decode('utf-8').strip('\x00')
                         print(f"[B+] ID: {b.id} | Nome: {nome_limpo}")
+                        if not dao_bairro.listar_personagens_do_bairro(b.id):
+                            print("    (Sem membros)")
                 else:
                     print("[Aviso] Nenhum bairro encontrado para este dono.")
             except ValueError:
