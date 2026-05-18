@@ -51,8 +51,8 @@ class PersonagemDAO:
             f.write(personagem.to_bytes())
 
             # ATUALIZAÇÃO DOS ÍNDICES
-            # O índice de ID de personagem e a Árvore B+ não estão totalmente estáveis no código atual.
-            # Para permitir a criação dos personagens, atualizamos apenas o relacionamento 1:N.
+            # Atualiza o índice primário por ID e os índices de busca por B+.
+            self.hash_id.insert(novo_id, posicao_atual)
             try:
                 self.arvore_id.inserir(novo_id, posicao_atual)      # B+ (ID)
                 self.arvore_nivel.inserir(int(personagem.nivel), posicao_atual) # B+ (Nível)

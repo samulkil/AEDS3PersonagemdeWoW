@@ -6,14 +6,17 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 from model.Personagem import Personagem
 from model.Conta import Conta
+from model.Bairro import Bairro
 from dao.PersonagemDAO import PersonagemDAO
 from dao.ContaDAO import ContaDAO
 from dao.GrupoTempDAO import GrupoTempDAO
+from dao.BairroDAO import BairroDAO
 
 # Instâncias dos DAOs
 dao_conta = ContaDAO()
 dao_perso = PersonagemDAO()
 dao_grupo_memoria = GrupoTempDAO()
+dao_bairro = BairroDAO()
 
 def menu_grupos(id_conta_logada):
     while True:
@@ -68,6 +71,193 @@ def menu_grupos(id_conta_logada):
         elif op == "4":
             break
 
+def menu_bairros(id_conta_logada):
+    while True:
+        print("\n" + "-"*40)
+        print("  GERENCIAR BAIRROS (N:N COM PERSONAGENS)  ")
+        print("-"*40)
+        print("1. Criar Novo Bairro")
+        print("2. Listar Todos os Bairros")
+        print("3. Buscar Bairro por ID (Árvore B+)")
+        print("4. Buscar Bairros por Dono (Árvore B+)")
+        print("5. Adicionar Personagem a um Bairro")
+        print("6. Remover Personagem de um Bairro")
+        print("7. Listar Personagens de um Bairro")
+        print("8. Atualizar Bairro")
+        print("9. Excluir Bairro")
+        print("10. Voltar")
+        
+        op = input("\nEscolha uma opção: ")
+
+        if op == "1":
+            nome_bairro = input("Nome do Bairro: ")
+            print("\nSelecione o Personagem DONO do Bairro:")
+            dao_perso.listar_por_conta(id_conta_logada)
+            try:
+                id_dono = int(input("\nDigite o ID do Personagem Dono: "))
+                p_dono = dao_perso.read_by_id_and_conta(id_dono, id_conta_logada)
+                if p_dono:
+                    novo_bairro = Bairro(0, nome_bairro, id_dono)
+                    dao_bairro.create(novo_bairro)
+                else:
+                    print("[Erro] Personagem inválido ou não pertence a sua conta.")
+            except ValueError:
+                print("[Erro] Entrada inválida.")
+
+        elif op == "2":
+            print("\n" + "-"*40)
+            print(f"{'ID':<5} | {'Nome':<30} | {'Dono':<5}")
+            print("-"*40)
+            bairros = dao_bairro.listar_todos_objetos()
+            if not bairros:
+                print("Nenhum bairro cadastrado.")
+            for b in bairros:
+                nome_limpo = b.nome.decode('utf-8').strip('\x00')
+                # Buscar nome do usuário dono
+                p_dono = dao_perso.read(b.id_dono)
+                nome_usuario_dono = "???"
+                if p_dono:
+                    conta_dono = dao_conta.read(p_dono.id_conta)
+                    if conta_dono:
+                        nome_usuario_dono = conta_dono.usuario.decode('utf-8').strip('\x00')
+                print(f"{b.id:<5} | {nome_limpo:<30} | Dono: {nome_usuario_dono}")
+                if not dao_bairro.listar_personagens_do_bairro(b.id):
+                    print("    (Sem membros)")
+
+        elif op == "3":
+            try:
+                id_bairro = int(input("\nDigite o ID do Bairro (Busca B+): "))
+                bairro = dao_bairro.read(id_bairro)
+                if bairro:
+                    nome_limpo = bairro.nome.decode('utf-8').strip('\x00')
+                    # Buscar nome do usuário dono
+                    p_dono = dao_perso.read(bairro.id_dono)
+                    nome_usuario_dono = "???"
+                    if p_dono:
+                        conta_dono = dao_conta.read(p_dono.id_conta)
+                        if conta_dono:
+                            nome_usuario_dono = conta_dono.usuario.decode('utf-8').strip('\x00')
+                    print(f"\n[B+] ID: {bairro.id} | Nome: {nome_limpo} | Dono: {nome_usuario_dono}")
+                    print(f"\n--- Membros do Bairro '{nome_limpo}' ---")
+                    if not dao_bairro.listar_personagens_do_bairro(id_bairro):
+                        print("  (Sem membros neste bairro)")
+                else:
+                    print("[Erro] Bairro não encontrado na árvore.")
+            except ValueError:
+                print("[Erro] Entrada inválida.")
+
+        elif op == "4":
+            try:
+                id_dono = int(input("\nDigite o ID do Personagem (Busca por Dono - B+): "))
+                bairros = dao_bairro.buscar_por_dono(id_dono)
+                if bairros:
+                    # Buscar nome do usuário dono
+                    p_dono = dao_perso.read(id_dono)
+                    nome_usuario_dono = "???"
+                    if p_dono:
+                        conta_dono = dao_conta.read(p_dono.id_conta)
+                        if conta_dono:
+                            nome_usuario_dono = conta_dono.usuario.decode('utf-8').strip('\x00')
+                    print(f"\n--- Bairros Pertencentes ao Personagem {id_dono} (Usuário: {nome_usuario_dono}) ---")
+                    for b in bairros:
+                        nome_limpo = b.nome.decode('utf-8').strip('\x00')
+                        print(f"[B+] ID: {b.id} | Nome: {nome_limpo}")
+                        if not dao_bairro.listar_personagens_do_bairro(b.id):
+                            print("    (Sem membros)")
+                else:
+                    print("[Aviso] Nenhum bairro encontrado para este dono.")
+            except ValueError:
+                print("[Erro] Entrada inválida.")
+
+        elif op == "5":
+            try:
+                id_bairro = int(input("ID do Bairro: "))
+                bairro = dao_bairro.read(id_bairro)
+                if bairro:
+                    print("\nSelecione o Personagem para ADICIONAR:")
+                    dao_perso.listar_por_conta(id_conta_logada)
+                    id_perso = int(input("\nDigite o ID do Personagem: "))
+                    p = dao_perso.read_by_id_and_conta(id_perso, id_conta_logada)
+                    if p:
+                        dao_bairro.adicionar_personagem(id_bairro, id_perso)
+                    else:
+                        print("[Erro] Personagem não encontrado ou não pertence a você.")
+                else:
+                    print("[Erro] Bairro não encontrado.")
+            except ValueError:
+                print("[Erro] Entrada inválida.")
+
+        elif op == "6":
+            try:
+                id_bairro = int(input("ID do Bairro: "))
+                bairro = dao_bairro.read(id_bairro)
+                if bairro:
+                    id_perso = int(input("ID do Personagem para REMOVER: "))
+                    dao_bairro.remover_personagem(id_bairro, id_perso)
+                else:
+                    print("[Erro] Bairro não encontrado.")
+            except ValueError:
+                print("[Erro] Entrada inválida.")
+
+        elif op == "7":
+            try:
+                id_bairro = int(input("ID do Bairro: "))
+                bairro = dao_bairro.read(id_bairro)
+                if bairro:
+                    nome_bairro = bairro.nome.decode('utf-8').strip('\x00')
+                    print(f"\n--- Personagens do Bairro '{nome_bairro}' ---")
+                    dao_bairro.listar_personagens_do_bairro(id_bairro)
+                else:
+                    print("[Erro] Bairro não encontrado.")
+            except ValueError:
+                print("[Erro] Entrada inválida.")
+
+        elif op == "8":
+            try:
+                id_bairro = int(input("ID do Bairro para atualizar: "))
+                bairro = dao_bairro.read(id_bairro)
+                if bairro:
+                    nome_atual = bairro.nome.decode('utf-8').strip('\x00')
+                    novo_nome = input(f"Novo Nome [{nome_atual}]: ") or nome_atual
+                    
+                    print("\nSelecione o novo DONO (ou deixe em branco para manter):")
+                    dao_perso.listar_por_conta(id_conta_logada)
+                    id_dono_input = input("\nNovo ID do Dono (deixe em branco para manter): ")
+                    
+                    if id_dono_input:
+                        novo_id_dono = int(id_dono_input)
+                        p = dao_perso.read_by_id_and_conta(novo_id_dono, id_conta_logada)
+                        if not p:
+                            print("[Erro] Personagem inválido.")
+                            continue
+                    else:
+                        novo_id_dono = bairro.id_dono
+                    
+                    dao_bairro.update(id_bairro, novo_nome, novo_id_dono)
+                    print("[Sucesso] Bairro atualizado!")
+                else:
+                    print("[Erro] Bairro não encontrado.")
+            except ValueError:
+                print("[Erro] Entrada inválida.")
+
+        elif op == "9":
+            try:
+                id_bairro = int(input("ID do Bairro para excluir: "))
+                bairro = dao_bairro.read(id_bairro)
+                if bairro:
+                    nome_bairro = bairro.nome.decode('utf-8').strip('\x00')
+                    confirmacao = input(f"Tem certeza que deseja excluir '{nome_bairro}'? (s/n): ")
+                    if confirmacao.lower() == 's':
+                        dao_bairro.delete(id_bairro)
+                        print("[Sucesso] Bairro excluído logicamente.")
+                else:
+                    print("[Erro] Bairro não encontrado.")
+            except ValueError:
+                print("[Erro] Entrada inválida.")
+
+        elif op == "10":
+            break
+
 def menu_personagens(id_conta_logada, nome_usuario):
     while True:
         print(f"\n" + "="*45)
@@ -81,7 +271,8 @@ def menu_personagens(id_conta_logada, nome_usuario):
         print("6. Atualizar Personagem")
         print("7. Excluir Personagem (Lógica)")
         print("8. Gerenciar Grupos Temporários")
-        print("9. Logout / Voltar")
+        print("9. Gerenciar Bairros (Relacionamento N:N)")
+        print("10. Logout / Voltar")
         
         op = input("\nEscolha uma opção: ")
 
@@ -176,6 +367,9 @@ def menu_personagens(id_conta_logada, nome_usuario):
             menu_grupos(id_conta_logada)
 
         elif op == "9":
+            menu_bairros(id_conta_logada)
+
+        elif op == "10":
             break
 
 def menu_contas():
