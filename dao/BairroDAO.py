@@ -145,11 +145,10 @@ class BairroDAO:
         if pos is not None:
             with open(self.arquivo, "rb+") as f:
                 f.seek(pos)
-                b_antigo = Bairro.from_bytes(f.read(self.reg_size))
+                _b_antigo = Bairro.from_bytes(f.read(self.reg_size))
                 
                 f.seek(pos)
                 b_novo = Bairro(id_alvo, novo_nome, novo_id_dono)
-                b_novo.prox = b_antigo.prox
                 f.write(b_novo.to_bytes())
                 return True
         return False
@@ -161,7 +160,12 @@ class BairroDAO:
             with open(self.arquivo, "rb+") as f:
                 f.seek(pos)
                 f.write(b'*')  # Marca lápide
-            
+            # Cascade: marca também todos os relacionamentos N:N deste bairro
+            try:
+                self.remover_todas_relacoes_do_bairro(id_alvo)
+            except Exception:
+                pass
+
             return True
         return False
 
@@ -258,6 +262,97 @@ class BairroDAO:
                 pos = relacao.prox
         
         return encontrou
+
+    def _reconstruir_encadeamento_bairro(self, id_bairro):
+        """Reconstrói o ponteiro inicial do hash_relacao para um bairro.
+        Encontra o primeiro relacionamento ativo (se houver) e atualiza o hash;
+        caso contrário remove a chave do hash.
+        """
+        primeiro = None
+        if not os.path.exists(self.arquivo_relacao):
+            try:
+                self.hash_relacao.remover(id_bairro)
+            except Exception:
+                pass
+            return
+
+        with open(self.arquivo_relacao, "rb") as f:
+            pos = 0
+            while True:
+                dados = f.read(self.reg_relacao_size)
+                if len(dados) != self.reg_relacao_size:
+                    break
+                rel = BairroPersonagem.from_bytes(dados)
+                if rel.id_bairro == id_bairro and rel.lapide == b' ':
+                    primeiro = pos
+                    break
+                pos += self.reg_relacao_size
+
+        try:
+            if primeiro is None:
+                self.hash_relacao.remover(id_bairro)
+            else:
+                self.hash_relacao.insert(id_bairro, primeiro)
+        except Exception:
+            pass
+
+    def remover_relacoes_por_personagem(self, id_personagem):
+        """Marca como excluídos todos os relacionamentos onde aparece o personagem.
+        Depois reconstrói os ponteiros iniciais dos bairros afetados.
+        """
+        if not os.path.exists(self.arquivo_relacao):
+            return False
+
+        afetados = set()
+        with open(self.arquivo_relacao, "rb+") as f:
+            pos = 0
+            while True:
+                dados = f.read(self.reg_relacao_size)
+                if len(dados) != self.reg_relacao_size:
+                    break
+                rel = BairroPersonagem.from_bytes(dados)
+                if rel.id_personagem == id_personagem and rel.lapide == b' ':
+                    # marca lápide
+                    f.seek(pos)
+                    f.write(b'*')
+                    afetados.add(rel.id_bairro)
+                pos += self.reg_relacao_size
+
+        # Reconstruir apontadores para cada bairro afetado
+        for b in afetados:
+            self._reconstruir_encadeamento_bairro(b)
+
+        return True
+
+    def remover_todas_relacoes_do_bairro(self, id_bairro):
+        """Marca como excluídos todos os relacionamentos de um bairro e remove a chave do hash."""
+        if not os.path.exists(self.arquivo_relacao):
+            try:
+                self.hash_relacao.remover(id_bairro)
+            except Exception:
+                pass
+            return False
+
+        removido = False
+        with open(self.arquivo_relacao, "rb+") as f:
+            pos = 0
+            while True:
+                dados = f.read(self.reg_relacao_size)
+                if len(dados) != self.reg_relacao_size:
+                    break
+                rel = BairroPersonagem.from_bytes(dados)
+                if rel.id_bairro == id_bairro and rel.lapide == b' ':
+                    f.seek(pos)
+                    f.write(b'*')
+                    removido = True
+                pos += self.reg_relacao_size
+
+        try:
+            self.hash_relacao.remover(id_bairro)
+        except Exception:
+            pass
+
+        return removido
 
     def _relacao_existe(self, id_bairro, id_personagem):
         """Verifica se uma relação já existe."""
