@@ -3,6 +3,7 @@ import struct
 from model.Personagem import Personagem
 from model.ArvoreBPlus import ArvoreBPlus
 from controller.HashExtensivel import HashExtensivel
+from dao.BairroDAO import BairroDAO
 
 class PersonagemDAO:
     def __init__(self, arquivo="dados/personagens.bin"):
@@ -190,6 +191,11 @@ class PersonagemDAO:
             
             # Remove do hash para não deixar índice poluído
             self.hash_id.remover(id_alvo)
-            
+            # Cascade: remove relações N:N onde esse personagem aparece
+            try:
+                BairroDAO().remover_relacoes_por_personagem(id_alvo)
+            except Exception:
+                pass
+
             return True
         return False
