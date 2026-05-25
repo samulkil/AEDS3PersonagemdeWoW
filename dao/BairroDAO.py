@@ -145,11 +145,10 @@ class BairroDAO:
         if pos is not None:
             with open(self.arquivo, "rb+") as f:
                 f.seek(pos)
-                b_antigo = Bairro.from_bytes(f.read(self.reg_size))
+                _b_antigo = Bairro.from_bytes(f.read(self.reg_size))
                 
                 f.seek(pos)
                 b_novo = Bairro(id_alvo, novo_nome, novo_id_dono)
-                b_novo.prox = b_antigo.prox
                 f.write(b_novo.to_bytes())
                 return True
         return False
