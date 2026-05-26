@@ -1,11 +1,10 @@
-from http.server import BaseHTTPRequestHandler, HTTPServer
+﻿from http.server import BaseHTTPRequestHandler, HTTPServer
 import urllib.parse
 import os
 import re
 import mimetypes
 import socketserver
 
-# Importação dos DAOs e Modelos
 from dao.ContaDAO import ContaDAO
 from model.Conta import Conta
 from dao.PersonagemDAO import PersonagemDAO
@@ -15,24 +14,21 @@ from dao.GrupoTempDAO import GrupoTempDAO
 HOST = "localhost"
 PORT = 8001
 
-# Instância global para persistência em memória (volátil)
 dao_grupo = GrupoTempDAO()
 
 class Servidor(BaseHTTPRequestHandler):
     
-    # --- UTILITÁRIOS ---
     
     def _render_template(self, nome_arquivo, contexto=None):
         if contexto is None: contexto = {}
         template_path = f'templates/{nome_arquivo}'
         
         if not os.path.exists(template_path):
-            return f"<h1>Erro: Template {nome_arquivo} não encontrado</h1>"
+            return f"<h1>Erro: Template {nome_arquivo} nÃ£o encontrado</h1>"
         
         with open(template_path, 'r', encoding='utf-8') as f:
             conteudo = f.read()
         
-        # Processa herança ({% extends %})
         extends_match = re.search(r'{%\s*extends\s+"([^"]+)"\s*%}', conteudo)
         if extends_match:
             base_template = extends_match.group(1)
@@ -47,12 +43,10 @@ class Servidor(BaseHTTPRequestHandler):
                 padrao = r'{%\s*block\s+' + nome_bloco + r'\s*%}.*?{%\s*endblock\s*%}'
                 conteudo = re.sub(padrao, conteudo_bloco, conteudo, flags=re.DOTALL)
         
-        # Processa includes ({% include %})
         conteudo = re.sub(r'{%\s*include\s+"([^"]+)"\s*%}', 
                          lambda m: open(f"templates/{m.group(1)}", 'r', encoding='utf-8').read(), 
                          conteudo)
         
-        # Substitui variáveis ({{variavel}})
         for chave, valor in contexto.items():
             padrao_safe = r'{{\s*' + chave + r'\s*\|\s*safe\s*}}'
             if re.search(padrao_safe, conteudo):
@@ -86,13 +80,12 @@ class Servidor(BaseHTTPRequestHandler):
         return None
 
     def _gerar_linhas_personagens(self, id_conta):
-        """Usa o relacionamento 1:N via Hash Extensível para listar personagens."""
+        """Usa o relacionamento 1:N via Hash ExtensÃ­vel para listar personagens."""
         dao = PersonagemDAO()
         import io, sys
         old_stdout = sys.stdout
         sys.stdout = io.StringIO()
         
-        # Método indexado via Hash
         dao.listar_por_conta(id_conta)
         
         output = sys.stdout.getvalue()
@@ -104,20 +97,19 @@ class Servidor(BaseHTTPRequestHandler):
                 if '|' in linha:
                     p = [part.strip() for part in linha.split('|')]
                     if len(p) >= 4:
-                        # Gera linhas para a tabela com colunas: ID, Nome, Nível, Função
                         linhas_html += f"<tr><td>{p[0]}</td><td>{p[1]}</td><td>{p[2]}</td><td>{p[3]}</td>"
-                        linhas_html += f"<td><a href='/editar_personagem?id={p[0]}' class='wow-link'>✏️ Editar</a> "
-                        linhas_html += f"<a href='/excluir_personagem?id={p[0]}' class='wow-link wow-link-danger' onclick='return confirm(\"Excluir?\");'>🗑️ Excluir</a></td></tr>"
+                        linhas_html += f"<td><a href='/editar_personagem?id={p[0]}' class='wow-link'>âœï¸ Editar</a> "
+                        linhas_html += f"<a href='/excluir_personagem?id={p[0]}' class='wow-link wow-link-danger' onclick='return confirm(\"Excluir?\");'>ðŸ—‘ï¸ Excluir</a></td></tr>"
         return linhas_html
 
     def _gerar_visualizacao_bplus_id(self):
-        """Monta uma visualização textual da Árvore B+ (índice por ID)."""
+        """Monta uma visualizaÃ§Ã£o textual da Ãrvore B+ (Ã­ndice por ID)."""
         try:
             dao = PersonagemDAO()
             arvore = dao.arvore_id
             raiz = arvore._ler_raiz()
             if raiz == -1:
-                return "<p class='wow-note'>Árvore B+ vazia.</p>"
+                return "<p class='wow-note'>Ãrvore B+ vazia.</p>"
 
             html = []
             fila = [(raiz, 0)]
@@ -144,13 +136,12 @@ class Servidor(BaseHTTPRequestHandler):
 
             html.append("<div style='display:flex; flex-direction:column; gap:10px;'>")
             for nivel in sorted(niveis.keys()):
-                html.append(f"<div><div class='wow-note' style='margin-bottom:4px;'><strong>Nível {nivel}</strong></div>")
+                html.append(f"<div><div class='wow-note' style='margin-bottom:4px;'><strong>NÃ­vel {nivel}</strong></div>")
                 html.append("<div style='display:flex; flex-wrap:wrap;'>")
                 html.extend(niveis[nivel])
                 html.append("</div></div>")
             html.append("</div>")
 
-            # Cadeia de folhas (ordem da esquerda para direita)
             no = arvore._ler_no(raiz)
             while not no.eh_folha and no.ponteiros:
                 no = arvore._ler_no(no.ponteiros[0])
@@ -164,15 +155,15 @@ class Servidor(BaseHTTPRequestHandler):
 
             if folhas:
                 html.append("<div class='wow-card' style='margin-top:10px;'>")
-                html.append("<div class='wow-note'><strong>Encadeamento das folhas:</strong> " + " → ".join(folhas) + "</div>")
+                html.append("<div class='wow-note'><strong>Encadeamento das folhas:</strong> " + " â†’ ".join(folhas) + "</div>")
                 html.append("</div>")
 
             return "".join(html)
         except Exception as e:
-            return f"<p class='wow-note'>Não foi possível renderizar a Árvore B+: {e}</p>"
+            return f"<p class='wow-note'>NÃ£o foi possÃ­vel renderizar a Ãrvore B+: {e}</p>"
 
     def _gerar_linhas_personagens_selecao_grupo(self, id_conta):
-        """Gera linhas de seleção com radio pronto para criar/entrar em grupo."""
+        """Gera linhas de seleÃ§Ã£o com radio pronto para criar/entrar em grupo."""
         dao = PersonagemDAO()
         import io, sys
         old_stdout = sys.stdout
@@ -198,16 +189,12 @@ class Servidor(BaseHTTPRequestHandler):
                     )
         return linhas_html
 
-    # --- ROTAS GET ---
-
     def do_GET(self):
         usuario_logado = self._get_usuario_logado()
         url_parseada = urllib.parse.urlparse(self.path)
-        # CORREÇÃO DO ERRO 404: Normalização do caminho
         caminho = url_parseada.path.rstrip('/') or '/'
         params = urllib.parse.parse_qs(url_parseada.query)
 
-        # Arquivos Estáticos e Imagens
         if caminho.startswith(("/static", "/imagens")):
             folder = "static" if "/static" in caminho else "imagens"
             path_parts = caminho.split(f"/{folder}/")
@@ -223,7 +210,6 @@ class Servidor(BaseHTTPRequestHandler):
             self.send_error(404)
             return
 
-        # Roteamento de Páginas
         if caminho == "/":
             self.send_response(200)
             self.end_headers()
@@ -250,7 +236,6 @@ class Servidor(BaseHTTPRequestHandler):
             })
             self.wfile.write(html.encode())
 
-        # --- SISTEMA DE GRUPOS ---
         
         elif caminho == "/grupos" or caminho == "/group":
             if not usuario_logado: return self._redirect("/login")
@@ -276,14 +261,14 @@ class Servidor(BaseHTTPRequestHandler):
             try:
                 id_g = int(params.get('id', [0])[0])
             except (ValueError, TypeError):
-                return self._render_mensagem("ID inválido", "Informe um ID de grupo válido para ver os detalhes.", "/grupos", "Voltar")
+                return self._render_mensagem("ID invÃ¡lido", "Informe um ID de grupo vÃ¡lido para ver os detalhes.", "/grupos", "Voltar")
             membros = dao_grupo.listar_membros_do_grupo(id_g)
             
             linhas = ""
             dao_p = PersonagemDAO()
             dao_c = ContaDAO()
             for m in membros:
-                p = dao_p.read(m.id_personagem) # Busca via Hash PK
+                p = dao_p.read(m.id_personagem)
                 if p:
                     f_str = p.funcao.decode().strip('\x00')
                     n_str = p.nome.decode().strip('\x00')
@@ -305,14 +290,13 @@ class Servidor(BaseHTTPRequestHandler):
                 'usuario': usuario_logado['usuario'],
                 'id_grupo': id_g,
                 'personagens': self._gerar_linhas_personagens_selecao_grupo(usuario_logado['id']),
-                'titulo_grupo': f"Juntar-se ao Grupo #{id_g}",
+                'titulo_grupo': f"Juntar-se ao Grupo
                 'form_action': f"/entrar_no_grupo_final?id_g={id_g}"
             })
             self.wfile.write(html.encode())
 
         elif caminho == "/entrar_no_grupo_final":
             if not usuario_logado: return self._redirect("/login")
-            # Esta rota é processada via POST (formulário). Em GET, apenas redireciona.
             self._redirect("/grupos")
 
         elif caminho == "/criar_grupo_web":
@@ -321,14 +305,13 @@ class Servidor(BaseHTTPRequestHandler):
             self.end_headers()
             html = self._render_template('criar_grupo_selecao.html', {
                 'usuario': usuario_logado['usuario'],
-                'id_grupo': 0, # Indica que é criação de novo grupo
+                'id_grupo': 0,
                 'personagens': self._gerar_linhas_personagens_selecao_grupo(usuario_logado['id']),
                 'titulo_grupo': "Iniciar Nova Jornada",
                 'form_action': "/processar_criacao_grupo"
             })
             self.wfile.write(html.encode())
 
-        # Rotas de Cadastro/Login
         elif caminho == "/criar_conta":
             self.send_response(200)
             self.end_headers()
@@ -384,7 +367,7 @@ class Servidor(BaseHTTPRequestHandler):
             dao = ContaDAO()
             conta = dao.read(usuario_logado['id'])
             if not conta:
-                return self._render_mensagem("Conta não encontrada", "Não foi possível carregar suas configurações.", "/personagens", "Voltar")
+                return self._render_mensagem("Conta nÃ£o encontrada", "NÃ£o foi possÃ­vel carregar suas configuraÃ§Ãµes.", "/personagens", "Voltar")
             self.send_response(200)
             self.end_headers()
             html = self._render_template('config_conta.html', {
@@ -407,8 +390,6 @@ class Servidor(BaseHTTPRequestHandler):
 
         else: self.send_error(404)
 
-    # --- ROTAS POST ---
-
     def do_POST(self):
         usuario_logado = self._get_usuario_logado()
         url_parseada = urllib.parse.urlparse(self.path)
@@ -420,9 +401,9 @@ class Servidor(BaseHTTPRequestHandler):
         if caminho == "/salvar_conta":
             u, e, d = parametros.get("usuario", [""])[0], parametros.get("email", [""])[0], parametros.get("data", [""])[0]
             dao = ContaDAO()
-            if dao.read_por_usuario(u): return self._render_mensagem("Erro!", "Nome de usuário já existe.", "/criar_conta", "Voltar")
+            if dao.read_por_usuario(u): return self._render_mensagem("Erro!", "Nome de usuÃ¡rio jÃ¡ existe.", "/criar_conta", "Voltar")
             dao.create(Conta(0, u, e, d))
-            self._render_mensagem("Sucesso!", f"Conta de {u} criada!", "/", "Ir para início")
+            self._render_mensagem("Sucesso!", f"Conta de {u} criada!", "/", "Ir para inÃ­cio")
 
         elif caminho == "/autenticar":
             u = parametros.get("usuario", [""])[0]
@@ -433,7 +414,7 @@ class Servidor(BaseHTTPRequestHandler):
                 self._set_cookie('id_conta', str(conta.id))
                 self._set_cookie('usuario', conta.usuario)
                 self.end_headers()
-            else: self._render_mensagem("Acesso Negado!", "Usuário não encontrado.", "/login", "Tentar novamente")
+            else: self._render_mensagem("Acesso Negado!", "UsuÃ¡rio nÃ£o encontrado.", "/login", "Tentar novamente")
 
         elif caminho == "/salvar_personagem":
             if not usuario_logado: return self._redirect("/login")
@@ -462,7 +443,7 @@ class Servidor(BaseHTTPRequestHandler):
             if id_g:
                 self._redirect(f"/detalhes_grupo?id={id_g}")
             else:
-                self._render_mensagem("Erro ao criar grupo", "Personagem inválido para liderança do grupo.", "/grupos", "Voltar")
+                self._render_mensagem("Erro ao criar grupo", "Personagem invÃ¡lido para lideranÃ§a do grupo.", "/grupos", "Voltar")
 
         elif caminho == "/entrar_no_grupo_final":
             if not usuario_logado: return self._redirect("/login")
@@ -471,16 +452,14 @@ class Servidor(BaseHTTPRequestHandler):
             id_p = int(parametros.get("id_p", [0])[0])
             dao_p = PersonagemDAO()
 
-            # Garante que o personagem escolhido pertence ao usuário logado
             p = dao_p.read(id_p)
             if not p or p.id_conta != usuario_logado['id']:
-                return self._render_mensagem("Acesso Negado", "Você só pode entrar no grupo com personagens da sua conta.", "/grupos", "Voltar")
+                return self._render_mensagem("Acesso Negado", "VocÃª sÃ³ pode entrar no grupo com personagens da sua conta.", "/grupos", "Voltar")
 
-            # Validação da regra 1 Tanque / 1 Suporte / 3 Danos
             if dao_grupo.adicionar_ao_grupo(id_g, usuario_logado['id'], id_p, dao_p):
                 self._redirect(f"/detalhes_grupo?id={id_g}")
             else:
-                self._render_mensagem("Erro de Composição!", "O grupo não pode aceitar este personagem (limite de função ou conta já presente).", "/grupos", "Voltar")
+                self._render_mensagem("Erro de ComposiÃ§Ã£o!", "O grupo nÃ£o pode aceitar este personagem (limite de funÃ§Ã£o ou conta jÃ¡ presente).", "/grupos", "Voltar")
 
         elif caminho == "/excluir_conta":
             if not usuario_logado: return self._redirect("/login")
@@ -501,7 +480,6 @@ class Servidor(BaseHTTPRequestHandler):
                 dao.update(conta.id, conta_atualizada)
             self._redirect("/config_conta")
 
-    # --- AUXILIARES ---
     
     def _redirect(self, url):
         self.send_response(302)

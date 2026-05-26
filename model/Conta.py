@@ -1,13 +1,10 @@
-import struct
+﻿import struct
 
 class Conta:
-    # Formato: Lápide(1s), ID(i), Usuário(20s), Email(30s), Data(10s)
-    # Total fixo: 65 bytes
     FORMATO = "<1s i 20s 30s 10s" 
 
     def __init__(self, id, usuario, email, data, lapide=b' '):
         self.id = id
-        # Tratamento para garantir tamanhos fixos
         self.usuario = usuario.encode('utf-8')[:20] if isinstance(usuario, str) else usuario[:20]
         self.email = email.encode('utf-8')[:30] if isinstance(email, str) else email[:30]
         self.data = data.encode('utf-8')[:10] if isinstance(data, str) else data[:10]

@@ -1,7 +1,6 @@
 import sys
 import os
 
-# Ajuste de caminho para garantir que os módulos sejam encontrados
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 from model.Personagem import Personagem
@@ -27,7 +26,7 @@ def menu_grupos(id_conta_logada):
         print("2. Convidar Personagem a um grupo")
         print("3. Listar Membros de um Grupo")
         print("4. Voltar")
-        
+
         op = input("\nEscolha uma opção: ")
 
         if op == "1":
@@ -67,7 +66,7 @@ def menu_grupos(id_conta_logada):
                     print("\nGrupo não encontrado ou vazio.")
             except ValueError:
                 print("[Erro] ID inválido.")
-        
+
         elif op == "4":
             break
 
@@ -80,13 +79,14 @@ def menu_bairros(id_conta_logada):
         print("2. Listar Todos os Bairros")
         print("3. Buscar Bairro por ID (Árvore B+)")
         print("4. Buscar Bairros por Dono (Árvore B+)")
-        print("5. Adicionar Personagem a um Bairro")
-        print("6. Remover Personagem de um Bairro")
-        print("7. Listar Personagens de um Bairro")
-        print("8. Atualizar Bairro")
-        print("9. Excluir Bairro")
-        print("10. Voltar")
-        
+        print("5. Listar Bairros Ordenados por ID (Árvore B+ - Consulta Ordenada)")
+        print("6. Adicionar Personagem a um Bairro")
+        print("7. Remover Personagem de um Bairro")
+        print("8. Listar Personagens de um Bairro")
+        print("9. Atualizar Bairro")
+        print("10. Excluir Bairro")
+        print("11. Voltar")
+
         op = input("\nEscolha uma opção: ")
 
         if op == "1":
@@ -170,6 +170,29 @@ def menu_bairros(id_conta_logada):
                 print("[Erro] Entrada inválida.")
 
         elif op == "5":
+            print("\n" + "-"*50)
+            print("BAIRROS ORDENADOS POR ID (Árvore B+ - Consulta Ordenada)")
+            print("-"*50)
+            bairros_ordenados = dao_bairro.listar_todos_ordenado_por_id()
+
+            if not bairros_ordenados:
+                print("Nenhum bairro cadastrado.")
+            else:
+                print(f"{'ID':<5} | {'Nome':<30} | {'Dono':<20}")
+                print("-"*50)
+                for b in bairros_ordenados:
+                    nome_limpo = b.nome.decode('utf-8').strip('\x00')
+                    p_dono = dao_perso.read(b.id_dono)
+                    nome_usuario_dono = "???"
+                    if p_dono:
+                        conta_dono = dao_conta.read(p_dono.id_conta)
+                        if conta_dono:
+                            nome_usuario_dono = conta_dono.usuario.decode('utf-8').strip('\x00')
+                    print(f"{b.id:<5} | {nome_limpo:<30} | {nome_usuario_dono:<20}")
+                    if not dao_bairro.listar_personagens_do_bairro(b.id):
+                        print("    (Sem membros)")
+
+        elif op == "6":
             try:
                 id_bairro = int(input("ID do Bairro: "))
                 bairro = dao_bairro.read(id_bairro)
@@ -187,7 +210,7 @@ def menu_bairros(id_conta_logada):
             except ValueError:
                 print("[Erro] Entrada inválida.")
 
-        elif op == "6":
+        elif op == "7":
             try:
                 id_bairro = int(input("ID do Bairro: "))
                 bairro = dao_bairro.read(id_bairro)
@@ -199,7 +222,7 @@ def menu_bairros(id_conta_logada):
             except ValueError:
                 print("[Erro] Entrada inválida.")
 
-        elif op == "7":
+        elif op == "8":
             try:
                 id_bairro = int(input("ID do Bairro: "))
                 bairro = dao_bairro.read(id_bairro)
@@ -212,18 +235,18 @@ def menu_bairros(id_conta_logada):
             except ValueError:
                 print("[Erro] Entrada inválida.")
 
-        elif op == "8":
+        elif op == "9":
             try:
                 id_bairro = int(input("ID do Bairro para atualizar: "))
                 bairro = dao_bairro.read(id_bairro)
                 if bairro:
                     nome_atual = bairro.nome.decode('utf-8').strip('\x00')
                     novo_nome = input(f"Novo Nome [{nome_atual}]: ") or nome_atual
-                    
+
                     print("\nSelecione o novo DONO (ou deixe em branco para manter):")
                     dao_perso.listar_por_conta(id_conta_logada)
                     id_dono_input = input("\nNovo ID do Dono (deixe em branco para manter): ")
-                    
+
                     if id_dono_input:
                         novo_id_dono = int(id_dono_input)
                         p = dao_perso.read_by_id_and_conta(novo_id_dono, id_conta_logada)
@@ -232,7 +255,7 @@ def menu_bairros(id_conta_logada):
                             continue
                     else:
                         novo_id_dono = bairro.id_dono
-                    
+
                     dao_bairro.update(id_bairro, novo_nome, novo_id_dono)
                     print("[Sucesso] Bairro atualizado!")
                 else:
@@ -240,7 +263,7 @@ def menu_bairros(id_conta_logada):
             except ValueError:
                 print("[Erro] Entrada inválida.")
 
-        elif op == "9":
+        elif op == "10":
             try:
                 id_bairro = int(input("ID do Bairro para excluir: "))
                 bairro = dao_bairro.read(id_bairro)
@@ -255,7 +278,7 @@ def menu_bairros(id_conta_logada):
             except ValueError:
                 print("[Erro] Entrada inválida.")
 
-        elif op == "10":
+        elif op == "11":
             break
 
 def menu_personagens(id_conta_logada, nome_usuario):
@@ -273,13 +296,13 @@ def menu_personagens(id_conta_logada, nome_usuario):
         print("8. Gerenciar Grupos Temporários")
         print("9. Gerenciar Bairros (Relacionamento N:N)")
         print("10. Logout / Voltar")
-        
+
         op = input("\nEscolha uma opção: ")
 
         if op == "1":
             nome = input("Nome do personagem: ")
             nivel = float(input("Nível inicial: "))
-            
+
             while True:
                 funcao = input("Função (dano, tanque, suporte): ").lower()
                 if funcao in ["dano", "tanque", "suporte"]:
@@ -311,7 +334,7 @@ def menu_personagens(id_conta_logada, nome_usuario):
                     print("\n[Erro] Registro não encontrado na árvore.")
             except ValueError:
                 print("\n[Erro] Entrada inválida.")
-                
+
         elif op == "4":
             try:
                 nivel = float(input("Digite o nível para busca (B+): "))
@@ -339,7 +362,7 @@ def menu_personagens(id_conta_logada, nome_usuario):
                     n_nome = input(f"Novo Nome [{p_check.nome.decode().strip()}]: ") or p_check.nome.decode().strip()
                     n_nivel = input(f"Novo Nível [{p_check.nivel}]: ")
                     n_nivel = float(n_nivel) if n_nivel else p_check.nivel
-                    
+
                     while True:
                         f_atual = p_check.funcao.decode().strip('\x00')
                         n_funcao = input(f"Nova Função [{f_atual}]: ").lower() or f_atual
@@ -384,7 +407,7 @@ def menu_contas():
         print("5. ENTRAR (Login)")
         print("6. Ordenação Externa (por Usuário)")
         print("7. Sair do Programa")
-        
+
         opcao = input("\nEscolha uma opção: ")
 
         if opcao == "1":
@@ -409,13 +432,13 @@ def menu_contas():
                     u = input(f"Novo Usuário [{conta_existente.usuario}]: ") or conta_existente.usuario
                     e = input(f"Novo Email [{conta_existente.email}]: ") or conta_existente.email
                     d = input(f"Nova Data [{conta_existente.data}]: ") or conta_existente.data
-            
+
                     conta_atualizada = Conta(id_c, u, e, d)
                     dao_conta.update(id_c, conta_atualizada)
                     print("\n[Sucesso] Conta atualizada!")
                 else:
                     print("\n[Erro] Conta não encontrada.")
-            except ValueError: 
+            except ValueError:
                 print("\nErro na entrada.")
 
         elif opcao == "4":
