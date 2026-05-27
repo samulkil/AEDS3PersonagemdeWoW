@@ -1,0 +1,38 @@
+{% extends "base_wow.html" %}
+
+{% block title %}Bairros - {{usuario}}{% endblock %}
+
+{% block content %}
+<h1 class="wow-title">Bairros do Mundo</h1>
+
+<div class="wow-nav">
+    <a href="/criar_bairro" class="wow-btn wow-btn-success">Criar Novo Bairro</a>
+    <a href="/personagens" class="wow-btn">Voltar aos Personagens</a>
+    <a href="/" class="wow-btn">Voltar ao Início</a>
+</div>
+
+<div class="wow-card wow-card-highlight">
+    <div class="wow-card-title">Lista de Bairros</div>
+
+    <table class="wow-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Dono (Usuário)</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{bairros|safe}}
+        </tbody>
+    </table>
+
+    <div class="wow-card" style="margin-top: 20px; background: rgba(0,0,0,0.3);">
+        <p class="wow-note">
+            Esta listagem utiliza <strong>Árvore B+</strong> e <strong>Hash Extensível</strong> para encontrar bairros e seus relacionamentos com personagens.
+        </p>
+    </div>
+</div>
+{% endblock %}
+

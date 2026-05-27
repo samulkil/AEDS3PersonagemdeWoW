@@ -15,6 +15,7 @@
                     <th>Personagem ID</th>
                     <th>Nome</th>
                     <th>Funcao</th>
+                    <th>Acoes</th>
                 </tr>
             </thead>
             <tbody>
@@ -24,7 +25,8 @@
     </div>
 </div>
 
-<div class="wow-actions">
+<div class="wow-actions" style="flex-wrap: wrap; gap: 8px;">
+    {{botoes_topo|safe}}
     <a href="/grupos" class="wow-btn">Voltar para Grupos</a>
     <a href="/personagens" class="wow-btn">Meus Personagens</a>
 </div>

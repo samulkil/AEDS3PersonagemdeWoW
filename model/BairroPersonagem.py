@@ -1,16 +1,18 @@
-﻿import struct
+import struct
 
 class BairroPersonagem:
+    # Formato para o relacionamento N:N: Lápide(1s), ID_Bairro(i), ID_Personagem(i), Próximo(q)
+    # Total fixo: 18 bytes (1 + 4 + 4 + 8 + 1 de padding)
     FORMATO = "<1s i i q" 
 
     def __init__(self, id_bairro, id_personagem, prox=-1, lapide=b' '):
         self.id_bairro = id_bairro
         self.id_personagem = id_personagem
         self.lapide = lapide
-        self.prox = prox
+        self.prox = prox  # Ponteiro para o próximo registro na lista encadeada
 
     def to_bytes(self):      
-        """Converte o objeto para bytes para gravaÃ§Ã£o em arquivo binÃ¡rio."""
+        """Converte o objeto para bytes para gravação em arquivo binário."""
         return struct.pack(
             self.FORMATO, 
             self.lapide, 
@@ -21,7 +23,7 @@ class BairroPersonagem:
     
     @classmethod 
     def from_bytes(cls, dados):
-        """ReconstrÃ³i o objeto a partir de dados binÃ¡rios lidos do disco."""
+        """Reconstrói o objeto a partir de dados binários lidos do disco."""
         lapide, id_bairro, id_personagem, prox = struct.unpack(cls.FORMATO, dados)
         return cls(id_bairro, id_personagem, prox, lapide)
 

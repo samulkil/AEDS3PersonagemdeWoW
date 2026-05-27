@@ -1,34 +1,108 @@
-﻿from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import urllib.parse
 import os
 import re
 import mimetypes
 import socketserver
 
+# Importação dos DAOs e Modelos
 from dao.ContaDAO import ContaDAO
 from model.Conta import Conta
 from dao.PersonagemDAO import PersonagemDAO
 from model.Personagem import Personagem
 from dao.GrupoTempDAO import GrupoTempDAO
+from dao.BairroDAO import BairroDAO
+from model.Bairro import Bairro
 
 HOST = "localhost"
 PORT = 8001
 
+# Instância global para persistência em memória (volátil)
 dao_grupo = GrupoTempDAO()
 
 class Servidor(BaseHTTPRequestHandler):
     
+    # --- UTILITÁRIOS ---
+
+    def _avaliar_condicional(self, chave, contexto):
+        """Avalia se uma variável do contexto deve ser tratada como verdadeira."""
+        if chave not in contexto:
+            return False
+
+        valor = contexto.get(chave)
+        if isinstance(valor, bool):
+            return valor
+        if isinstance(valor, (int, float)):
+            return valor != 0
+
+        texto = str(valor).strip().lower()
+        return texto not in ('', 'false', '0', 'none', 'null')
+
+    def _processar_condicionais(self, conteudo, contexto):
+        """Processa blocos {% if %}, {% else %} e {% endif %} do template."""
+        tag_if = re.compile(r'{%\s*if\s+(\w+)\s*%}')
+        tag_else = re.compile(r'{%\s*else\s*%}')
+        tag_endif = re.compile(r'{%\s*endif\s*%}')
+
+        while tag_if.search(conteudo):
+            match = tag_if.search(conteudo)
+            chave = match.group(1)
+            cursor = match.end()
+            profundidade = 1
+            else_inicio = else_fim = None
+            endif_inicio = endif_fim = None
+
+            while cursor < len(conteudo) and profundidade > 0:
+                candidatos = []
+                for padrao, tipo in ((tag_if, 'if'), (tag_else, 'else'), (tag_endif, 'endif')):
+                    proximo = padrao.search(conteudo, cursor)
+                    if proximo:
+                        candidatos.append((proximo.start(), tipo, proximo))
+
+                if not candidatos:
+                    break
+
+                _, tipo, proximo = min(candidatos, key=lambda item: item[0])
+
+                if tipo == 'if':
+                    profundidade += 1
+                    cursor = proximo.end()
+                elif tipo == 'else' and profundidade == 1 and else_inicio is None:
+                    else_inicio = proximo.start()
+                    else_fim = proximo.end()
+                    cursor = proximo.end()
+                elif tipo == 'endif':
+                    profundidade -= 1
+                    if profundidade == 0:
+                        endif_inicio = proximo.start()
+                        endif_fim = proximo.end()
+                    else:
+                        cursor = proximo.end()
+                else:
+                    cursor = proximo.end()
+
+            if endif_inicio is None:
+                break
+
+            fim_bloco_if = else_inicio if else_inicio is not None else endif_inicio
+            bloco_if = conteudo[match.end():fim_bloco_if]
+            bloco_else = conteudo[else_fim:endif_inicio] if else_inicio is not None else ''
+            substituto = bloco_if if self._avaliar_condicional(chave, contexto) else bloco_else
+            conteudo = conteudo[:match.start()] + substituto + conteudo[endif_fim:]
+
+        return conteudo
     
     def _render_template(self, nome_arquivo, contexto=None):
         if contexto is None: contexto = {}
         template_path = f'templates/{nome_arquivo}'
         
         if not os.path.exists(template_path):
-            return f"<h1>Erro: Template {nome_arquivo} nÃ£o encontrado</h1>"
+            return f"<h1>Erro: Template {nome_arquivo} não encontrado</h1>"
         
         with open(template_path, 'r', encoding='utf-8') as f:
             conteudo = f.read()
         
+        # Processa herança ({% extends %})
         extends_match = re.search(r'{%\s*extends\s+"([^"]+)"\s*%}', conteudo)
         if extends_match:
             base_template = extends_match.group(1)
@@ -43,10 +117,15 @@ class Servidor(BaseHTTPRequestHandler):
                 padrao = r'{%\s*block\s+' + nome_bloco + r'\s*%}.*?{%\s*endblock\s*%}'
                 conteudo = re.sub(padrao, conteudo_bloco, conteudo, flags=re.DOTALL)
         
+        # Processa includes ({% include %})
         conteudo = re.sub(r'{%\s*include\s+"([^"]+)"\s*%}', 
                          lambda m: open(f"templates/{m.group(1)}", 'r', encoding='utf-8').read(), 
                          conteudo)
+
+        # Processa condicionais ({% if %}, {% else %}, {% endif %})
+        conteudo = self._processar_condicionais(conteudo, contexto)
         
+        # Substitui variáveis ({{variavel}})
         for chave, valor in contexto.items():
             padrao_safe = r'{{\s*' + chave + r'\s*\|\s*safe\s*}}'
             if re.search(padrao_safe, conteudo):
@@ -80,12 +159,13 @@ class Servidor(BaseHTTPRequestHandler):
         return None
 
     def _gerar_linhas_personagens(self, id_conta):
-        """Usa o relacionamento 1:N via Hash ExtensÃ­vel para listar personagens."""
+        """Usa o relacionamento 1:N via Hash Extensível para listar personagens."""
         dao = PersonagemDAO()
         import io, sys
         old_stdout = sys.stdout
         sys.stdout = io.StringIO()
         
+        # Método indexado via Hash
         dao.listar_por_conta(id_conta)
         
         output = sys.stdout.getvalue()
@@ -97,19 +177,20 @@ class Servidor(BaseHTTPRequestHandler):
                 if '|' in linha:
                     p = [part.strip() for part in linha.split('|')]
                     if len(p) >= 4:
+                        # Gera linhas para a tabela com colunas: ID, Nome, Nível, Função
                         linhas_html += f"<tr><td>{p[0]}</td><td>{p[1]}</td><td>{p[2]}</td><td>{p[3]}</td>"
-                        linhas_html += f"<td><a href='/editar_personagem?id={p[0]}' class='wow-link'>âœï¸ Editar</a> "
-                        linhas_html += f"<a href='/excluir_personagem?id={p[0]}' class='wow-link wow-link-danger' onclick='return confirm(\"Excluir?\");'>ðŸ—‘ï¸ Excluir</a></td></tr>"
+                        linhas_html += f"<td><a href='/editar_personagem?id={p[0]}' class='wow-link'>✏️ Editar</a> "
+                        linhas_html += f"<a href='/excluir_personagem?id={p[0]}' class='wow-link wow-link-danger' onclick='return confirm(\"Excluir?\");'>🗑️ Excluir</a></td></tr>"
         return linhas_html
 
-    def _gerar_visualizacao_bplus_id(self):
-        """Monta uma visualizaÃ§Ã£o textual da Ãrvore B+ (Ã­ndice por ID)."""
+    def _gerar_visualizacao_bplus_id(self, id_busca=None):
+        """Monta uma visualização estruturada da Árvore B+ (índice por ID)."""
         try:
             dao = PersonagemDAO()
             arvore = dao.arvore_id
             raiz = arvore._ler_raiz()
             if raiz == -1:
-                return "<p class='wow-note'>Ãrvore B+ vazia.</p>"
+                return "<p class='wow-note'>Árvore B+ vazia.</p>"
 
             html = []
             fila = [(raiz, 0)]
@@ -125,8 +206,17 @@ class Servidor(BaseHTTPRequestHandler):
                 no = arvore._ler_no(offset)
                 tipo = "Folha" if no.eh_folha else "Interno"
                 chaves = ", ".join(str(c) for c in no.chaves) if no.chaves else "vazio"
-                prox = f" | prox: {no.proximo}" if no.eh_folha else ""
-                cartao = f"<div class='wow-card' style='min-width: 220px; margin: 6px;'><strong>{tipo}</strong><br>off: {offset}<br>chaves: [{chaves}]{prox}</div>"
+                destaque = ""
+                if id_busca is not None and no.eh_folha and id_busca in no.chaves:
+                    destaque = " wow-bplus-node-highlight"
+                cartao = (
+                    f"<article class='wow-card wow-bplus-node{destaque}'>"
+                    f"<div class='wow-bplus-node-badge'>{tipo}</div>"
+                    f"<div class='wow-bplus-node-meta'>offset: {offset}</div>"
+                    f"<div class='wow-bplus-node-keys'>chaves: [{chaves}]</div>"
+                    + (f"<div class='wow-bplus-node-next'>proximo: {no.proximo}</div>" if no.eh_folha else "")
+                    + "</article>"
+                )
                 niveis.setdefault(nivel, []).append(cartao)
 
                 if not no.eh_folha:
@@ -134,36 +224,50 @@ class Servidor(BaseHTTPRequestHandler):
                         if filho not in (None, -1, 0):
                             fila.append((filho, nivel + 1))
 
-            html.append("<div style='display:flex; flex-direction:column; gap:10px;'>")
+            html.append("<section class='wow-bplus-tree'>")
             for nivel in sorted(niveis.keys()):
-                html.append(f"<div><div class='wow-note' style='margin-bottom:4px;'><strong>NÃ­vel {nivel}</strong></div>")
-                html.append("<div style='display:flex; flex-wrap:wrap;'>")
+                html.append("<div class='wow-bplus-level'>")
+                html.append(f"<div class='wow-note wow-bplus-level-title'><strong>Nível {nivel}</strong></div>")
+                html.append("<div class='wow-bplus-level-nodes'>")
                 html.extend(niveis[nivel])
                 html.append("</div></div>")
-            html.append("</div>")
+            html.append("</section>")
 
+            # Cadeia de folhas (ordem da esquerda para direita)
             no = arvore._ler_no(raiz)
             while not no.eh_folha and no.ponteiros:
                 no = arvore._ler_no(no.ponteiros[0])
 
             folhas = []
             while no:
-                folhas.append("[" + ", ".join(str(c) for c in no.chaves) + "]")
+                classe_folha = ""
+                if id_busca is not None and id_busca in no.chaves:
+                    classe_folha = " wow-bplus-leaf-chain-item-highlight"
+                folhas.append(
+                    f"<span class='wow-bplus-leaf-chain-item{classe_folha}'>"
+                    + "[" + ", ".join(str(c) for c in no.chaves) + "]"
+                    + "</span>"
+                )
                 if no.proximo in (-1, None):
                     break
                 no = arvore._ler_no(no.proximo)
 
             if folhas:
-                html.append("<div class='wow-card' style='margin-top:10px;'>")
-                html.append("<div class='wow-note'><strong>Encadeamento das folhas:</strong> " + " â†’ ".join(folhas) + "</div>")
+                html.append("<div class='wow-card wow-bplus-leaf-chain'>")
+                html.append(
+                    "<div class='wow-note'><strong>Encadeamento das folhas:</strong> "
+                    + "<span class='wow-bplus-leaf-chain-track'>"
+                    + " <span class='wow-bplus-leaf-chain-arrow'>→</span> ".join(folhas)
+                    + "</span></div>"
+                )
                 html.append("</div>")
 
             return "".join(html)
         except Exception as e:
-            return f"<p class='wow-note'>NÃ£o foi possÃ­vel renderizar a Ãrvore B+: {e}</p>"
+            return f"<p class='wow-note'>Não foi possível renderizar a Árvore B+: {e}</p>"
 
     def _gerar_linhas_personagens_selecao_grupo(self, id_conta):
-        """Gera linhas de seleÃ§Ã£o com radio pronto para criar/entrar em grupo."""
+        """Gera linhas de seleção com radio pronto para criar/entrar em grupo."""
         dao = PersonagemDAO()
         import io, sys
         old_stdout = sys.stdout
@@ -189,12 +293,142 @@ class Servidor(BaseHTTPRequestHandler):
                     )
         return linhas_html
 
+    def _bairro_pertence_conta(self, bairro, id_conta):
+        """Verifica se o personagem dono do bairro pertence à conta logada."""
+        if not bairro:
+            return False
+        p = PersonagemDAO().read_by_id_and_conta(bairro.id_dono, id_conta)
+        return p is not None
+
+    def _gerar_opcoes_personagens_dono(self, id_conta, id_selecionado=None):
+        """Gera <option> para escolher o personagem dono do bairro."""
+        dao = PersonagemDAO()
+        import io, sys
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        dao.listar_por_conta(id_conta)
+        output = sys.stdout.getvalue()
+        sys.stdout = old_stdout
+
+        opcoes = ""
+        if output.strip():
+            for linha in output.strip().split('\n'):
+                if '|' not in linha:
+                    continue
+                p = [part.strip() for part in linha.split('|')]
+                if len(p) < 4:
+                    continue
+                try:
+                    id_p = int(p[0])
+                except ValueError:
+                    continue
+                selected = ' selected' if id_selecionado is not None and id_p == id_selecionado else ''
+                opcoes += f"<option value='{id_p}'{selected}>{p[0]} - {p[1]} ({p[3]})</option>"
+
+        if not opcoes:
+            opcoes = "<option value='' disabled selected>Nenhum personagem disponível</option>"
+        return opcoes
+
+    def _gerar_linhas_bairros(self, id_conta):
+        """Gera linhas de bairros para exibição na página web."""
+        dao_bairro = BairroDAO()
+        dao_perso = PersonagemDAO()
+        dao_conta = ContaDAO()
+
+        bairros = dao_bairro.listar_todos_objetos()
+        linhas_html = ""
+
+        for b in bairros:
+            nome_limpo = b.nome.decode('utf-8').strip('\x00')
+            p_dono = dao_perso.read(b.id_dono)
+            nome_usuario_dono = "???"
+            if p_dono:
+                conta_dono = dao_conta.read(p_dono.id_conta)
+                if conta_dono:
+                    nome_usuario_dono = conta_dono.usuario.decode('utf-8').strip('\x00')
+
+            acoes = f"<a href='/bairros_personagens?id={b.id}' class='wow-link'>Ver personagens</a>"
+            if self._bairro_pertence_conta(b, id_conta):
+                acoes += (
+                    f" <a href='/editar_bairro?id={b.id}' class='wow-link'>✏️ Editar</a>"
+                    f" <a href='/excluir_bairro?id={b.id}' class='wow-link wow-link-danger'"
+                    f" onclick='return confirm(\"Excluir este bairro?\");'>🗑️ Excluir</a>"
+                )
+
+            linhas_html += (
+                f"<tr>"
+                f"<td>{b.id}</td>"
+                f"<td>{nome_limpo}</td>"
+                f"<td>{nome_usuario_dono}</td>"
+                f"<td>{acoes}</td>"
+                f"</tr>"
+            )
+
+        if not linhas_html:
+            linhas_html = "<tr><td colspan='4'>Nenhum bairro cadastrado.</td></tr>"
+
+        return linhas_html
+
+    def _gerar_linhas_personagens_bairro(self, id_bairro, pode_gerenciar=False):
+        """Lista personagens de um bairro em formato de tabela HTML."""
+        dao_bairro = BairroDAO()
+        dao_perso = PersonagemDAO()
+
+        import io, sys
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+
+        dao_bairro.listar_personagens_do_bairro(id_bairro)
+
+        output = sys.stdout.getvalue()
+        sys.stdout = old_stdout
+
+        linhas_html = ""
+        for linha in output.strip().split("\n"):
+            # Esperado: "  - Personagem ID: X"
+            partes = linha.strip().split(":")
+            if len(partes) != 2:
+                continue
+            try:
+                id_p = int(partes[1].strip())
+            except ValueError:
+                continue
+
+            p = dao_perso.read(id_p)
+            if not p:
+                continue
+
+            nome_p = p.nome.decode('utf-8').strip('\x00')
+            func_p = p.funcao.decode('utf-8').strip('\x00')
+            nivel_p = p.nivel
+
+            linhas_html += (
+                f"<tr>"
+                f"<td>{id_p}</td>"
+                f"<td>{nome_p}</td>"
+                f"<td>{nivel_p}</td>"
+                f"<td>{func_p}</td>"
+                + (f"<td><a href='/remover_personagem_bairro?id_bairro={id_bairro}&id_personagem={id_p}' "
+                   f"class='wow-link wow-link-danger' onclick='return confirm(\"Remover do bairro?\");'>Remover</a></td>"
+                   if pode_gerenciar else "")
+                + f"</tr>"
+            )
+
+        if not linhas_html:
+            linhas_html = "<tr><td colspan='5'>Este bairro não possui personagens.</td></tr>" if pode_gerenciar else "<tr><td colspan='4'>Este bairro não possui personagens.</td></tr>"
+
+        return linhas_html
+
+    # --- ROTAS GET ---
+
     def do_GET(self):
         usuario_logado = self._get_usuario_logado()
         url_parseada = urllib.parse.urlparse(self.path)
+        # CORREÇÃO DO ERRO 404: Normalização do caminho
         caminho = url_parseada.path.rstrip('/') or '/'
         params = urllib.parse.parse_qs(url_parseada.query)
 
+        # Arquivos Estáticos e Imagens
         if caminho.startswith(("/static", "/imagens")):
             folder = "static" if "/static" in caminho else "imagens"
             path_parts = caminho.split(f"/{folder}/")
@@ -210,6 +444,7 @@ class Servidor(BaseHTTPRequestHandler):
             self.send_error(404)
             return
 
+        # Roteamento de Páginas
         if caminho == "/":
             self.send_response(200)
             self.end_headers()
@@ -226,16 +461,91 @@ class Servidor(BaseHTTPRequestHandler):
             })
             self.wfile.write(html.encode())
 
+        elif caminho == "/bairros":
+            if not usuario_logado: return self._redirect("/login")
+            self.send_response(200)
+            self.end_headers()
+            html = self._render_template('bairros.html', {
+                'usuario': usuario_logado['usuario'],
+                'bairros': self._gerar_linhas_bairros(usuario_logado['id'])
+            })
+            self.wfile.write(html.encode())
+
+        elif caminho == "/criar_bairro":
+            if not usuario_logado: return self._redirect("/login")
+            self.send_response(200)
+            self.end_headers()
+            html = self._render_template('criar_bairro.html', {
+                'usuario': usuario_logado['usuario'],
+                'opcoes_dono': self._gerar_opcoes_personagens_dono(usuario_logado['id'])
+            })
+            self.wfile.write(html.encode())
+
+        elif caminho == "/editar_bairro":
+            if not usuario_logado: return self._redirect("/login")
+            try:
+                id_b = int(params.get('id', [0])[0])
+            except (ValueError, TypeError):
+                return self._render_mensagem("ID inválido", "Informe um ID de bairro válido.", "/bairros", "Voltar")
+            dao_bairro = BairroDAO()
+            bairro = dao_bairro.read(id_b)
+            if not bairro or not self._bairro_pertence_conta(bairro, usuario_logado['id']):
+                return self._render_mensagem("Acesso negado", "Você só pode editar bairros dos seus personagens.", "/bairros", "Voltar")
+            nome_b = bairro.nome.decode('utf-8').strip('\x00')
+            self.send_response(200)
+            self.end_headers()
+            html = self._render_template('editar_bairro.html', {
+                'usuario': usuario_logado['usuario'],
+                'id': bairro.id,
+                'nome': nome_b,
+                'opcoes_dono': self._gerar_opcoes_personagens_dono(usuario_logado['id'], bairro.id_dono)
+            })
+            self.wfile.write(html.encode())
+
+        elif caminho == "/excluir_bairro":
+            if not usuario_logado: return self._redirect("/login")
+            try:
+                id_b = int(params.get('id', [0])[0])
+            except (ValueError, TypeError):
+                return self._render_mensagem("ID inválido", "Informe um ID de bairro válido.", "/bairros", "Voltar")
+            dao_bairro = BairroDAO()
+            bairro = dao_bairro.read(id_b)
+            if bairro and self._bairro_pertence_conta(bairro, usuario_logado['id']):
+                dao_bairro.delete(id_b)
+            self._redirect("/bairros")
+
         elif caminho == "/arvore_bplus":
             if not usuario_logado: return self._redirect("/login")
+
+            id_busca_param = params.get('id_busca', [""])[0].strip()
+            id_busca_valor = None
+            mensagem_busca = ""
+
+            if id_busca_param:
+                try:
+                    id_busca_valor = int(id_busca_param)
+                    dao_p = PersonagemDAO()
+                    personagem = dao_p.read_bplus(id_busca_valor)
+                    if personagem:
+                        nome = personagem.nome.decode('utf-8').strip('\x00')
+                        funcao = personagem.funcao.decode('utf-8').strip('\x00')
+                        mensagem_busca = f"Personagem encontrado no índice B+: ID {personagem.id}, {nome} ({funcao}), nível {personagem.nivel:.2f}."
+                    else:
+                        mensagem_busca = f"Nenhum personagem com ID {id_busca_valor} foi encontrado no índice B+."
+                except ValueError:
+                    mensagem_busca = "Informe um ID numérico válido para buscar na Árvore B+."
+
             self.send_response(200)
             self.end_headers()
             html = self._render_template('arvore_bplus.html', {
                 'usuario': usuario_logado['usuario'],
-                'visualizacao_bplus': self._gerar_visualizacao_bplus_id()
+                'visualizacao_bplus': self._gerar_visualizacao_bplus_id(id_busca_valor),
+                'id_busca': id_busca_param,
+                'mensagem_busca': mensagem_busca
             })
             self.wfile.write(html.encode())
 
+        # --- SISTEMA DE GRUPOS ---
         
         elif caminho == "/grupos" or caminho == "/group":
             if not usuario_logado: return self._redirect("/login")
@@ -261,14 +571,14 @@ class Servidor(BaseHTTPRequestHandler):
             try:
                 id_g = int(params.get('id', [0])[0])
             except (ValueError, TypeError):
-                return self._render_mensagem("ID invÃ¡lido", "Informe um ID de grupo vÃ¡lido para ver os detalhes.", "/grupos", "Voltar")
+                return self._render_mensagem("ID inválido", "Informe um ID de grupo válido para ver os detalhes.", "/grupos", "Voltar")
             membros = dao_grupo.listar_membros_do_grupo(id_g)
             
             linhas = ""
             dao_p = PersonagemDAO()
             dao_c = ContaDAO()
             for m in membros:
-                p = dao_p.read(m.id_personagem)
+                p = dao_p.read(m.id_personagem) # Busca via Hash PK
                 if p:
                     f_str = p.funcao.decode().strip('\x00')
                     n_str = p.nome.decode().strip('\x00')
@@ -290,13 +600,14 @@ class Servidor(BaseHTTPRequestHandler):
                 'usuario': usuario_logado['usuario'],
                 'id_grupo': id_g,
                 'personagens': self._gerar_linhas_personagens_selecao_grupo(usuario_logado['id']),
-                'titulo_grupo': f"Juntar-se ao Grupo
+                'titulo_grupo': f"Juntar-se ao Grupo #{id_g}",
                 'form_action': f"/entrar_no_grupo_final?id_g={id_g}"
             })
             self.wfile.write(html.encode())
 
         elif caminho == "/entrar_no_grupo_final":
             if not usuario_logado: return self._redirect("/login")
+            # Esta rota é processada via POST (formulário). Em GET, apenas redireciona.
             self._redirect("/grupos")
 
         elif caminho == "/criar_grupo_web":
@@ -305,13 +616,14 @@ class Servidor(BaseHTTPRequestHandler):
             self.end_headers()
             html = self._render_template('criar_grupo_selecao.html', {
                 'usuario': usuario_logado['usuario'],
-                'id_grupo': 0,
+                'id_grupo': 0, # Indica que é criação de novo grupo
                 'personagens': self._gerar_linhas_personagens_selecao_grupo(usuario_logado['id']),
                 'titulo_grupo': "Iniciar Nova Jornada",
                 'form_action': "/processar_criacao_grupo"
             })
             self.wfile.write(html.encode())
 
+        # Rotas de Cadastro/Login
         elif caminho == "/criar_conta":
             self.send_response(200)
             self.end_headers()
@@ -367,7 +679,7 @@ class Servidor(BaseHTTPRequestHandler):
             dao = ContaDAO()
             conta = dao.read(usuario_logado['id'])
             if not conta:
-                return self._render_mensagem("Conta nÃ£o encontrada", "NÃ£o foi possÃ­vel carregar suas configuraÃ§Ãµes.", "/personagens", "Voltar")
+                return self._render_mensagem("Conta não encontrada", "Não foi possível carregar suas configurações.", "/personagens", "Voltar")
             self.send_response(200)
             self.end_headers()
             html = self._render_template('config_conta.html', {
@@ -377,6 +689,87 @@ class Servidor(BaseHTTPRequestHandler):
                 'data': conta.data
             })
             self.wfile.write(html.encode())
+
+        elif caminho == "/bairros_personagens":
+            if not usuario_logado: return self._redirect("/login")
+            try:
+                id_bairro = int(params.get('id', [0])[0])
+            except (ValueError, TypeError):
+                return self._render_mensagem(
+                    "Bairro inválido",
+                    "Informe um ID de bairro válido.",
+                    "/bairros",
+                    "Voltar"
+                )
+
+            dao_bairro = BairroDAO()
+            bairro = dao_bairro.read(id_bairro)
+            if not bairro:
+                return self._render_mensagem(
+                    "Bairro não encontrado",
+                    "Não foi possível localizar o bairro informado.",
+                    "/bairros",
+                    "Voltar"
+                )
+
+            nome_bairro = bairro.nome.decode('utf-8').strip('\x00')
+            pode_gerenciar = self._bairro_pertence_conta(bairro, usuario_logado['id'])
+
+            self.send_response(200)
+            self.end_headers()
+            html = self._render_template('bairros_personagens.html', {
+                'usuario': usuario_logado['usuario'],
+                'nome_bairro': nome_bairro,
+                'id_bairro': id_bairro,
+                'pode_gerenciar': "true" if pode_gerenciar else "",
+                'personagens_bairro': self._gerar_linhas_personagens_bairro(id_bairro, pode_gerenciar)
+            })
+            self.wfile.write(html.encode())
+
+        elif caminho == "/selecionar_personagem_bairro":
+            if not usuario_logado: return self._redirect("/login")
+            try:
+                id_bairro = int(params.get('id', [0])[0])
+            except (ValueError, TypeError):
+                return self._render_mensagem("Bairro inválido", "Informe um ID de bairro válido.", "/bairros", "Voltar")
+
+            dao_bairro = BairroDAO()
+            bairro = dao_bairro.read(id_bairro)
+            if not bairro or not self._bairro_pertence_conta(bairro, usuario_logado['id']):
+                return self._render_mensagem("Acesso negado", "Você só pode gerenciar personagens em bairros dos seus personagens.", f"/bairros_personagens?id={id_bairro}", "Voltar")
+
+            nome_bairro = bairro.nome.decode('utf-8').strip('\x00')
+
+            self.send_response(200)
+            self.end_headers()
+            html = self._render_template('selecionar_personagem_bairro.html', {
+                'usuario': usuario_logado['usuario'],
+                'nome_bairro': nome_bairro,
+                'id_bairro': id_bairro,
+                'personagens': self._gerar_linhas_personagens_selecao_grupo(usuario_logado['id']),
+                'form_action': f"/adicionar_personagem_bairro?id_bairro={id_bairro}"
+            })
+            self.wfile.write(html.encode())
+
+        elif caminho == "/remover_personagem_bairro":
+            if not usuario_logado: return self._redirect("/login")
+            try:
+                id_bairro = int(params.get('id_bairro', [0])[0])
+                id_personagem = int(params.get('id_personagem', [0])[0])
+            except (ValueError, TypeError):
+                return self._render_mensagem("Erro", "Parâmetros inválidos.", "/bairros", "Voltar")
+
+            dao_bairro = BairroDAO()
+            bairro = dao_bairro.read(id_bairro)
+            if not bairro or not self._bairro_pertence_conta(bairro, usuario_logado['id']):
+                return self._render_mensagem("Acesso negado", "Você só pode gerenciar personagens em bairros dos seus personagens.", f"/bairros_personagens?id={id_bairro}", "Voltar")
+
+            # Só permite remover personagens da própria conta (evita mexer no personagem dos outros)
+            if not PersonagemDAO().read_by_id_and_conta(id_personagem, usuario_logado['id']):
+                return self._render_mensagem("Acesso negado", "Você só pode remover personagens da sua conta.", f"/bairros_personagens?id={id_bairro}", "Voltar")
+
+            dao_bairro.remover_personagem(id_bairro, id_personagem)
+            self._redirect(f"/bairros_personagens?id={id_bairro}")
 
         elif caminho == "/confirmar_excluir_conta":
             if not usuario_logado: return self._redirect("/login")
@@ -390,6 +783,8 @@ class Servidor(BaseHTTPRequestHandler):
 
         else: self.send_error(404)
 
+    # --- ROTAS POST ---
+
     def do_POST(self):
         usuario_logado = self._get_usuario_logado()
         url_parseada = urllib.parse.urlparse(self.path)
@@ -401,9 +796,9 @@ class Servidor(BaseHTTPRequestHandler):
         if caminho == "/salvar_conta":
             u, e, d = parametros.get("usuario", [""])[0], parametros.get("email", [""])[0], parametros.get("data", [""])[0]
             dao = ContaDAO()
-            if dao.read_por_usuario(u): return self._render_mensagem("Erro!", "Nome de usuÃ¡rio jÃ¡ existe.", "/criar_conta", "Voltar")
+            if dao.read_por_usuario(u): return self._render_mensagem("Erro!", "Nome de usuário já existe.", "/criar_conta", "Voltar")
             dao.create(Conta(0, u, e, d))
-            self._render_mensagem("Sucesso!", f"Conta de {u} criada!", "/", "Ir para inÃ­cio")
+            self._render_mensagem("Sucesso!", f"Conta de {u} criada!", "/", "Ir para início")
 
         elif caminho == "/autenticar":
             u = parametros.get("usuario", [""])[0]
@@ -414,7 +809,7 @@ class Servidor(BaseHTTPRequestHandler):
                 self._set_cookie('id_conta', str(conta.id))
                 self._set_cookie('usuario', conta.usuario)
                 self.end_headers()
-            else: self._render_mensagem("Acesso Negado!", "UsuÃ¡rio nÃ£o encontrado.", "/login", "Tentar novamente")
+            else: self._render_mensagem("Acesso Negado!", "Usuário não encontrado.", "/login", "Tentar novamente")
 
         elif caminho == "/salvar_personagem":
             if not usuario_logado: return self._redirect("/login")
@@ -443,7 +838,7 @@ class Servidor(BaseHTTPRequestHandler):
             if id_g:
                 self._redirect(f"/detalhes_grupo?id={id_g}")
             else:
-                self._render_mensagem("Erro ao criar grupo", "Personagem invÃ¡lido para lideranÃ§a do grupo.", "/grupos", "Voltar")
+                self._render_mensagem("Erro ao criar grupo", "Personagem inválido para liderança do grupo.", "/grupos", "Voltar")
 
         elif caminho == "/entrar_no_grupo_final":
             if not usuario_logado: return self._redirect("/login")
@@ -452,14 +847,16 @@ class Servidor(BaseHTTPRequestHandler):
             id_p = int(parametros.get("id_p", [0])[0])
             dao_p = PersonagemDAO()
 
+            # Garante que o personagem escolhido pertence ao usuário logado
             p = dao_p.read(id_p)
             if not p or p.id_conta != usuario_logado['id']:
-                return self._render_mensagem("Acesso Negado", "VocÃª sÃ³ pode entrar no grupo com personagens da sua conta.", "/grupos", "Voltar")
+                return self._render_mensagem("Acesso Negado", "Você só pode entrar no grupo com personagens da sua conta.", "/grupos", "Voltar")
 
+            # Validação da regra 1 Tanque / 1 Suporte / 3 Danos
             if dao_grupo.adicionar_ao_grupo(id_g, usuario_logado['id'], id_p, dao_p):
                 self._redirect(f"/detalhes_grupo?id={id_g}")
             else:
-                self._render_mensagem("Erro de ComposiÃ§Ã£o!", "O grupo nÃ£o pode aceitar este personagem (limite de funÃ§Ã£o ou conta jÃ¡ presente).", "/grupos", "Voltar")
+                self._render_mensagem("Erro de Composição!", "O grupo não pode aceitar este personagem (limite de função ou conta já presente).", "/grupos", "Voltar")
 
         elif caminho == "/excluir_conta":
             if not usuario_logado: return self._redirect("/login")
@@ -480,6 +877,66 @@ class Servidor(BaseHTTPRequestHandler):
                 dao.update(conta.id, conta_atualizada)
             self._redirect("/config_conta")
 
+        elif caminho == "/salvar_bairro":
+            if not usuario_logado: return self._redirect("/login")
+            nome = parametros.get("nome", [""])[0].strip()
+            try:
+                id_dono = int(parametros.get("id_dono", [0])[0])
+            except (ValueError, TypeError):
+                return self._render_mensagem("Erro", "Selecione um personagem dono válido.", "/criar_bairro", "Voltar")
+            if not nome:
+                return self._render_mensagem("Erro", "Informe o nome do bairro.", "/criar_bairro", "Voltar")
+            dao_p = PersonagemDAO()
+            if not dao_p.read_by_id_and_conta(id_dono, usuario_logado['id']):
+                return self._render_mensagem("Acesso negado", "O dono deve ser um personagem da sua conta.", "/criar_bairro", "Voltar")
+            BairroDAO().create(Bairro(0, nome, id_dono))
+            self._redirect("/bairros")
+
+        elif caminho == "/atualizar_bairro":
+            if not usuario_logado: return self._redirect("/login")
+            try:
+                id_b = int(parametros.get("id", [0])[0])
+                id_dono = int(parametros.get("id_dono", [0])[0])
+            except (ValueError, TypeError):
+                return self._render_mensagem("Erro", "Dados inválidos para atualização.", "/bairros", "Voltar")
+            nome = parametros.get("nome", [""])[0].strip()
+            if not nome:
+                return self._render_mensagem("Erro", "Informe o nome do bairro.", f"/editar_bairro?id={id_b}", "Voltar")
+            dao_bairro = BairroDAO()
+            bairro = dao_bairro.read(id_b)
+            if not bairro or not self._bairro_pertence_conta(bairro, usuario_logado['id']):
+                return self._render_mensagem("Acesso negado", "Você só pode editar bairros dos seus personagens.", "/bairros", "Voltar")
+            dao_p = PersonagemDAO()
+            if not dao_p.read_by_id_and_conta(id_dono, usuario_logado['id']):
+                return self._render_mensagem("Acesso negado", "O novo dono deve ser um personagem da sua conta.", f"/editar_bairro?id={id_b}", "Voltar")
+            if dao_bairro.update(id_b, nome, id_dono):
+                self._redirect("/bairros")
+            else:
+                self._render_mensagem("Erro", "Não foi possível atualizar o bairro.", "/bairros", "Voltar")
+
+        elif caminho == "/adicionar_personagem_bairro":
+            if not usuario_logado: return self._redirect("/login")
+            try:
+                id_bairro = int(urllib.parse.parse_qs(url_parseada.query).get('id_bairro', [0])[0])
+                id_p = int(parametros.get("id_p", [0])[0])
+            except (ValueError, TypeError):
+                return self._render_mensagem("Erro", "Dados inválidos.", "/bairros", "Voltar")
+
+            dao_bairro = BairroDAO()
+            bairro = dao_bairro.read(id_bairro)
+            if not bairro or not self._bairro_pertence_conta(bairro, usuario_logado['id']):
+                return self._render_mensagem("Acesso negado", "Você só pode gerenciar personagens em bairros dos seus personagens.", f"/bairros_personagens?id={id_bairro}", "Voltar")
+
+            # Só permite adicionar personagens da própria conta
+            if not PersonagemDAO().read_by_id_and_conta(id_p, usuario_logado['id']):
+                return self._render_mensagem("Acesso negado", "Você só pode adicionar personagens da sua conta.", f"/bairros_personagens?id={id_bairro}", "Voltar")
+
+            if dao_bairro.adicionar_personagem(id_bairro, id_p):
+                self._redirect(f"/bairros_personagens?id={id_bairro}")
+            else:
+                self._render_mensagem("Erro", "Não foi possível adicionar (talvez já esteja no bairro).", f"/bairros_personagens?id={id_bairro}", "Voltar")
+
+    # --- AUXILIARES ---
     
     def _redirect(self, url):
         self.send_response(302)
