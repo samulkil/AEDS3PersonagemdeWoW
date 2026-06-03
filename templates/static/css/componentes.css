@@ -243,6 +243,92 @@
     color: #ffd2ca;
 }
 
+.wow-bplus-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.wow-bplus-level {
+    border: 1px solid #5f482f;
+    background: rgba(18, 12, 15, 0.62);
+    padding: 12px;
+}
+
+.wow-bplus-level-title {
+    margin-bottom: 8px;
+}
+
+.wow-bplus-level-nodes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.wow-bplus-node {
+    min-width: 220px;
+    margin: 0;
+    padding: 14px;
+}
+
+.wow-bplus-node-badge {
+    display: inline-block;
+    margin-bottom: 8px;
+    padding: 3px 8px;
+    background: rgba(201, 168, 76, 0.18);
+    border: 1px solid #8a6b3a;
+    color: #f1d188;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.8px;
+}
+
+.wow-bplus-node-meta,
+.wow-bplus-node-keys,
+.wow-bplus-node-next {
+    color: #dcc9a5;
+    margin-top: 4px;
+    font-size: 0.92rem;
+}
+
+.wow-bplus-node-highlight {
+    border-color: #d4a852;
+    box-shadow:
+        0 0 14px rgba(212, 168, 82, 0.38),
+        inset 0 0 0 1px rgba(212, 168, 82, 0.32);
+}
+
+.wow-bplus-leaf-chain {
+    margin-top: 12px;
+}
+
+.wow-bplus-leaf-chain-track {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+}
+
+.wow-bplus-leaf-chain-item {
+    display: inline-block;
+    padding: 3px 8px;
+    border: 1px solid #6f4c2a;
+    background: rgba(30, 20, 24, 0.88);
+    color: #e9d9b9;
+}
+
+.wow-bplus-leaf-chain-item-highlight {
+    border-color: #d4a852;
+    color: #ffe2a7;
+    box-shadow: 0 0 8px rgba(212, 168, 82, 0.32);
+}
+
+.wow-bplus-leaf-chain-arrow {
+    color: #c59c59;
+    font-weight: 700;
+}
+
 @media (max-width: 768px) {
     .wow-title {
         font-size: 1.5rem;

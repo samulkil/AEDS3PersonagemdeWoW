@@ -1,0 +1,35 @@
+{% extends "base_wow.html" %}
+
+{% block title %}Adicionar personagem - {{nome_bairro}}{% endblock %}
+
+{% block content %}
+<h1 class="wow-title">Adicionar personagem ao Bairro "{{nome_bairro}}"</h1>
+
+<div style="max-width: 800px; margin: 0 auto;">
+    <div class="wow-card wow-card-highlight">
+        <div class="wow-card-title">Escolha um personagem da sua conta</div>
+
+        <form method="POST" action="{{form_action}}">
+            <table class="wow-table">
+                <thead>
+                    <tr>
+                        <th>Selecionar</th>
+                        <th>ID</th>
+                        <th>Nome</th>
+                        <th>Função</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{personagens|safe}}
+                </tbody>
+            </table>
+
+            <div class="wow-actions" style="justify-content: flex-start; margin-top: 25px;">
+                <button type="submit" class="wow-btn wow-btn-success">Adicionar ao bairro</button>
+                <a href="/bairros_personagens?id={{id_bairro}}" class="wow-btn">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

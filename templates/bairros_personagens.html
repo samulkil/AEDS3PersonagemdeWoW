@@ -1,0 +1,37 @@
+{% extends "base_wow.html" %}
+
+{% block title %}Personagens do Bairro {{nome_bairro}}{% endblock %}
+
+{% block content %}
+<h1 class="wow-title">Personagens no Bairro "{{nome_bairro}}"</h1>
+
+<div class="wow-nav">
+    <a href="/bairros" class="wow-btn">Voltar aos Bairros</a>
+    <a href="/personagens" class="wow-btn">Voltar aos Personagens</a>
+    
+    <a href="/selecionar_personagem_bairro?id={{id_bairro}}" class="wow-btn wow-btn-success">Adicionar personagem</a>
+
+</div>
+
+<div class="wow-card wow-card-highlight">
+    <div class="wow-card-title">Moradores do Bairro</div>
+
+    <table class="wow-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Nível</th>
+                <th>Função</th>
+        
+                <th>Ações</th>
+            
+            </tr>
+        </thead>
+        <tbody>
+            {{personagens_bairro|safe}}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+

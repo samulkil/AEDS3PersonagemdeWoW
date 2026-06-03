@@ -13,6 +13,29 @@
 
 <div class="wow-subtitle">Aventureiro Logado: <span style="color: #f1d188;">{{usuario}}</span></div>
 
+<div class="wow-card">
+    <div class="wow-card-title">Buscar por ID</div>
+    <form method="get" action="/arvore_bplus">
+        <div class="wow-form-group">
+            <label class="wow-label" for="id_busca">ID do Personagem</label>
+            <input
+                id="id_busca"
+                name="id_busca"
+                type="number"
+                min="1"
+                class="wow-input"
+                placeholder="Digite o ID exato"
+                value="{{id_busca}}"
+            />
+        </div>
+        <button type="submit" class="wow-btn">Buscar na Árvore</button>
+    </form>
+    {% if mensagem_busca %}
+    <hr class="wow-divider" />
+    <p class="wow-note">{{mensagem_busca}}</p>
+    {% endif %}
+</div>
+
 <div class="wow-card wow-card-highlight">
     <div class="wow-card-title">Índice B+ por ID</div>
     <p class="wow-note">Nós internos, folhas e encadeamento atual do índice B+.</p>

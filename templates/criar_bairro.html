@@ -1,0 +1,34 @@
+{% extends "base_wow.html" %}
+
+{% block title %}Criar Bairro - {{usuario}}{% endblock %}
+
+{% block content %}
+<h1 class="wow-title">Fundar Novo Bairro</h1>
+
+<div style="max-width: 600px; margin: 40px auto;">
+    <div class="wow-card wow-card-highlight">
+        <div class="wow-card-title">Dados do Bairro</div>
+
+        <form method="POST" action="/salvar_bairro">
+            <div class="wow-form-group">
+                <label class="wow-label">Nome do Bairro</label>
+                <input type="text" name="nome" class="wow-input" required maxlength="30"
+                       placeholder="Ex: Ventobravo, Dalaran...">
+            </div>
+
+            <div class="wow-form-group">
+                <label class="wow-label">Personagem Dono</label>
+                <select name="id_dono" class="wow-input" required>
+                    {{opcoes_dono|safe}}
+                </select>
+                <small style="color: #8b7355;">Apenas personagens da sua conta podem ser donos.</small>
+            </div>
+
+            <div class="wow-actions" style="justify-content: flex-start; margin-top: 25px;">
+                <button type="submit" class="wow-btn wow-btn-success">Criar Bairro</button>
+                <a href="/bairros" class="wow-btn">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
