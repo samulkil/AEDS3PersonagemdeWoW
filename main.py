@@ -11,6 +11,7 @@ from dao.PersonagemDAO import PersonagemDAO
 from dao.ContaDAO import ContaDAO
 from dao.GrupoTempDAO import GrupoTempDAO
 from dao.BairroDAO import BairroDAO
+from backup import create_backup_files
 
 # Instâncias dos DAOs
 dao_conta = ContaDAO()
@@ -384,8 +385,14 @@ def menu_contas():
         print("4. Excluir Conta (Lógica + Hash)")
         print("5. ENTRAR (Login)")
         print("6. Ordenação Externa (por Usuário)")
+<<<<<<< Updated upstream
         print("7. Sair do Programa")
         
+=======
+        print("7. Fazer Backup Compactado (Huffman + LZW)")
+        print("8. Sair do Programa")
+
+>>>>>>> Stashed changes
         opcao = input("\nEscolha uma opção: ")
 
         if opcao == "1":
@@ -440,6 +447,15 @@ def menu_contas():
             print("Arquivo 'contas_ordenadas.bin' gerado.")
 
         elif opcao == "7":
+            print("\nGerando backups compactados para todos os arquivos em dados/...")
+            try:
+                huffman_path, lzw_path = create_backup_files()
+                print(f"Backup Huffman gerado em: {huffman_path}")
+                print(f"Backup LZW gerado em: {lzw_path}")
+            except Exception as e:
+                print(f"[Erro] Não foi possível criar o backup: {e}")
+
+        elif opcao == "8":
             print("Encerrando sistema...")
             break
 
