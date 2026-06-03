@@ -385,14 +385,8 @@ def menu_contas():
         print("4. Excluir Conta (Lógica + Hash)")
         print("5. ENTRAR (Login)")
         print("6. Ordenação Externa (por Usuário)")
-<<<<<<< Updated upstream
-        print("7. Sair do Programa")
-        
-=======
         print("7. Fazer Backup Compactado (Huffman + LZW)")
         print("8. Sair do Programa")
-
->>>>>>> Stashed changes
         opcao = input("\nEscolha uma opção: ")
 
         if opcao == "1":
