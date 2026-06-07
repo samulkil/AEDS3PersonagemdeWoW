@@ -13,6 +13,7 @@ from model.Personagem import Personagem
 from dao.GrupoTempDAO import GrupoTempDAO
 from dao.BairroDAO import BairroDAO
 from model.Bairro import Bairro
+from backup import create_backup_files
 
 HOST = "localhost"
 PORT = 8001
@@ -780,6 +781,23 @@ class Servidor(BaseHTTPRequestHandler):
                 'id': usuario_logado['id']
             })
             self.wfile.write(html.encode())
+
+        elif caminho == "/fazer_backup":
+            if not usuario_logado: return self._redirect("/login")
+            try:
+                huffman_path, lzw_path = create_backup_files()
+                mensagem = (
+                    f"Backups compactados gerados com sucesso. "
+                    f"Huffman: {huffman_path}. LZW: {lzw_path}."
+                )
+                return self._render_mensagem("Backup concluído", mensagem, "/", "Voltar ao início")
+            except Exception as e:
+                return self._render_mensagem(
+                    "Erro no backup",
+                    f"Não foi possível criar o backup: {e}",
+                    "/",
+                    "Voltar ao início"
+                )
 
         else: self.send_error(404)
 
