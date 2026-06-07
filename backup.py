@@ -62,6 +62,49 @@ def _build_huffman_codes(freq_table):
     return codes
 
 
+def _build_huffman_tree(freq_table):
+    heap = []
+    for b, freq in enumerate(freq_table):
+        if freq > 0:
+            heapq.heappush(heap, _HuffmanNode(freq, byte=b))
+
+    if not heap:
+        return _HuffmanNode(0, byte=0)
+
+    if len(heap) == 1:
+        node = heapq.heappop(heap)
+        return _HuffmanNode(node.freq, None, left=node, right=_HuffmanNode(0, byte=node.byte))
+
+    while len(heap) > 1:
+        left = heapq.heappop(heap)
+        right = heapq.heappop(heap)
+        merged = _HuffmanNode(left.freq + right.freq, None, left=left, right=right)
+        heapq.heappush(heap, merged)
+
+    return heapq.heappop(heap)
+
+
+def _serialize_huffman_tree(node: _HuffmanNode) -> bytes:
+    bits = []
+    values = []
+
+    def _walk(n):
+        if n.byte is not None:
+            bits.append('1')
+            values.append(n.byte)
+        else:
+            bits.append('0')
+            _walk(n.left)
+            _walk(n.right)
+
+    _walk(node)
+    bit_string = ''.join(bits)
+    pad_length = (-len(bit_string)) % 8
+    bit_string += '0' * pad_length
+    tree_bytes = bytes(int(bit_string[i:i+8], 2) for i in range(0, len(bit_string), 8))
+    return struct.pack('<I', len(bit_string)) + tree_bytes + bytes(values)
+
+
 def _compress_huffman(data: bytes) -> tuple[bytes, bytes]:
     freq_table = [0] * 256
     for b in data:
@@ -74,8 +117,10 @@ def _compress_huffman(data: bytes) -> tuple[bytes, bytes]:
     bit_string += '0' * pad_length
 
     compressed_bytes = bytes(int(bit_string[i:i+8], 2) for i in range(0, len(bit_string), 8))
-    metadata = struct.pack('<Q', bit_length)
-    metadata += b''.join(struct.pack('<Q', freq) for freq in freq_table)
+
+    tree_root = _build_huffman_tree(freq_table)
+    tree_metadata = _serialize_huffman_tree(tree_root)
+    metadata = struct.pack('<I', len(tree_metadata)) + tree_metadata + struct.pack('<I', bit_length)
     return compressed_bytes, metadata
 
 
