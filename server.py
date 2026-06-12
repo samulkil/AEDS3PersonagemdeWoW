@@ -794,22 +794,32 @@ class Servidor(BaseHTTPRequestHandler):
         parametros = urllib.parse.parse_qs(self.rfile.read(tamanho).decode())
 
         if caminho == "/salvar_conta":
-            u, e, d = parametros.get("usuario", [""])[0], parametros.get("email", [""])[0], parametros.get("data", [""])[0]
+            u = parametros.get("usuario", [""])[0]
+            e = parametros.get("email", [""])[0]
+            d = parametros.get("data", [""])[0]
+            s = parametros.get("senha", [""])[0]
+            if not s:
+                return self._render_mensagem("Erro!", "A senha não pode ser vazia.", "/criar_conta", "Voltar")
             dao = ContaDAO()
-            if dao.read_por_usuario(u): return self._render_mensagem("Erro!", "Nome de usuário já existe.", "/criar_conta", "Voltar")
-            dao.create(Conta(0, u, e, d))
+            if dao.read_por_usuario(u):
+                return self._render_mensagem("Erro!", "Nome de usuário já existe.", "/criar_conta", "Voltar")
+            nova_conta = Conta(0, u, e, d)
+            nova_conta.set_senha(s)
+            dao.create(nova_conta)
             self._render_mensagem("Sucesso!", f"Conta de {u} criada!", "/", "Ir para início")
 
         elif caminho == "/autenticar":
             u = parametros.get("usuario", [""])[0]
+            s = parametros.get("senha", [""])[0]
             conta = ContaDAO().read_por_usuario(u)
-            if conta and conta.lapide == b' ':
+            if conta and conta.lapide == b' ' and conta.verificar_senha(s):
                 self.send_response(302)
                 self.send_header('Location', '/personagens')
                 self._set_cookie('id_conta', str(conta.id))
                 self._set_cookie('usuario', conta.usuario)
                 self.end_headers()
-            else: self._render_mensagem("Acesso Negado!", "Usuário não encontrado.", "/login", "Tentar novamente")
+            else:
+                self._render_mensagem("Acesso Negado!", "Usuário ou senha inválidos.", "/login", "Tentar novamente")
 
         elif caminho == "/salvar_personagem":
             if not usuario_logado: return self._redirect("/login")
