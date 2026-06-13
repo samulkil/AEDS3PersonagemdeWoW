@@ -369,10 +369,53 @@ class Servidor(BaseHTTPRequestHandler):
 
         return linhas_html
 
-    def _gerar_linhas_personagens_bairro(self, id_bairro, pode_gerenciar=False):
+    def _gerar_todos_personagens_selecao(self):
+        """Retorna linhas HTML com todos os personagens de todas as contas para seleção."""
+        dao_p = PersonagemDAO()
+        dao_c = ContaDAO()
+        personagens = dao_p.listar_todos_objetos() if hasattr(dao_p, 'listar_todos_objetos') else []
+
+        # Fallback: varredura direta se não houver método dedicado
+        if not personagens:
+            import struct, os
+            reg_size = struct.calcsize(dao_p.formato) if hasattr(dao_p, 'formato') else 51
+            try:
+                from model.Personagem import Personagem as _P
+                reg_size = struct.calcsize(_P.FORMATO)
+                with open(dao_p.arquivo, "rb") as f:
+                    f.seek(dao_p.header_size)
+                    while True:
+                        dados = f.read(reg_size)
+                        if len(dados) != reg_size:
+                            break
+                        p = _P.from_bytes(dados)
+                        if p.lapide == b' ':
+                            personagens.append(p)
+            except Exception:
+                pass
+
+        linhas = ""
+        for p in personagens:
+            nome_p = p.nome.decode('utf-8').strip('\x00')
+            func_p = p.funcao.decode('utf-8').strip('\x00')
+            conta = dao_c.read(p.id_conta)
+            usuario_p = conta.usuario.decode('utf-8').strip('\x00') if conta else f"conta {p.id_conta}"
+            linhas += (
+                f"<tr>"
+                f"<td><input type='radio' name='id_p' value='{p.id}' required></td>"
+                f"<td>{p.id}</td>"
+                f"<td>{nome_p}</td>"
+                f"<td>{func_p}</td>"
+                f"<td>{usuario_p}</td>"
+                f"</tr>"
+            )
+        return linhas or "<tr><td colspan='5'>Nenhum personagem cadastrado.</td></tr>"
+
+    def _gerar_linhas_personagens_bairro(self, id_bairro, pode_gerenciar=False, id_conta_logada=None):
         """Lista personagens de um bairro em formato de tabela HTML."""
         dao_bairro = BairroDAO()
         dao_perso = PersonagemDAO()
+        dao_conta = ContaDAO()
 
         import io, sys
         old_stdout = sys.stdout
@@ -385,7 +428,6 @@ class Servidor(BaseHTTPRequestHandler):
 
         linhas_html = ""
         for linha in output.strip().split("\n"):
-            # Esperado: "  - Personagem ID: X"
             partes = linha.strip().split(":")
             if len(partes) != 2:
                 continue
@@ -401,6 +443,23 @@ class Servidor(BaseHTTPRequestHandler):
             nome_p = p.nome.decode('utf-8').strip('\x00')
             func_p = p.funcao.decode('utf-8').strip('\x00')
             nivel_p = p.nivel
+            conta_p = dao_conta.read(p.id_conta)
+            usuario_p = conta_p.usuario.decode('utf-8').strip('\x00') if conta_p else f"conta {p.id_conta}"
+
+            # Dono do bairro pode remover qualquer personagem
+            eh_dono_perso = (id_conta_logada is not None and p.id_conta == id_conta_logada)
+
+            acoes = ""
+            if pode_gerenciar:
+                acoes = (
+                    f"<a href='/remover_personagem_bairro?id_bairro={id_bairro}&id_personagem={id_p}' "
+                    f"class='wow-link wow-link-danger' onclick='return confirm(\"Remover do bairro?\");'>Remover</a>"
+                )
+            elif eh_dono_perso:
+                acoes = (
+                    f"<a href='/sair_do_bairro?id_bairro={id_bairro}&id_personagem={id_p}' "
+                    f"class='wow-link wow-link-danger' onclick='return confirm(\"Sair deste bairro?\");'>Sair</a>"
+                )
 
             linhas_html += (
                 f"<tr>"
@@ -408,14 +467,13 @@ class Servidor(BaseHTTPRequestHandler):
                 f"<td>{nome_p}</td>"
                 f"<td>{nivel_p}</td>"
                 f"<td>{func_p}</td>"
-                + (f"<td><a href='/remover_personagem_bairro?id_bairro={id_bairro}&id_personagem={id_p}' "
-                   f"class='wow-link wow-link-danger' onclick='return confirm(\"Remover do bairro?\");'>Remover</a></td>"
-                   if pode_gerenciar else "")
-                + f"</tr>"
+                f"<td>{usuario_p}</td>"
+                f"<td>{acoes}</td>"
+                f"</tr>"
             )
 
         if not linhas_html:
-            linhas_html = "<tr><td colspan='5'>Este bairro não possui personagens.</td></tr>" if pode_gerenciar else "<tr><td colspan='4'>Este bairro não possui personagens.</td></tr>"
+            linhas_html = "<tr><td colspan='6'>Este bairro não possui personagens.</td></tr>"
 
         return linhas_html
 
@@ -722,7 +780,9 @@ class Servidor(BaseHTTPRequestHandler):
                 'nome_bairro': nome_bairro,
                 'id_bairro': id_bairro,
                 'pode_gerenciar': "true" if pode_gerenciar else "",
-                'personagens_bairro': self._gerar_linhas_personagens_bairro(id_bairro, pode_gerenciar)
+                'personagens_bairro': self._gerar_linhas_personagens_bairro(
+                    id_bairro, pode_gerenciar, usuario_logado['id']
+                )
             })
             self.wfile.write(html.encode())
 
@@ -746,7 +806,7 @@ class Servidor(BaseHTTPRequestHandler):
                 'usuario': usuario_logado['usuario'],
                 'nome_bairro': nome_bairro,
                 'id_bairro': id_bairro,
-                'personagens': self._gerar_linhas_personagens_selecao_grupo(usuario_logado['id']),
+                'personagens': self._gerar_todos_personagens_selecao(),
                 'form_action': f"/adicionar_personagem_bairro?id_bairro={id_bairro}"
             })
             self.wfile.write(html.encode())
@@ -762,13 +822,25 @@ class Servidor(BaseHTTPRequestHandler):
             dao_bairro = BairroDAO()
             bairro = dao_bairro.read(id_bairro)
             if not bairro or not self._bairro_pertence_conta(bairro, usuario_logado['id']):
-                return self._render_mensagem("Acesso negado", "Você só pode gerenciar personagens em bairros dos seus personagens.", f"/bairros_personagens?id={id_bairro}", "Voltar")
-
-            # Só permite remover personagens da própria conta (evita mexer no personagem dos outros)
-            if not PersonagemDAO().read_by_id_and_conta(id_personagem, usuario_logado['id']):
-                return self._render_mensagem("Acesso negado", "Você só pode remover personagens da sua conta.", f"/bairros_personagens?id={id_bairro}", "Voltar")
+                return self._render_mensagem("Acesso negado", "Somente o dono do bairro pode remover personagens.", f"/bairros_personagens?id={id_bairro}", "Voltar")
 
             dao_bairro.remover_personagem(id_bairro, id_personagem)
+            self._redirect(f"/bairros_personagens?id={id_bairro}")
+
+        elif caminho == "/sair_do_bairro":
+            if not usuario_logado: return self._redirect("/login")
+            try:
+                id_bairro = int(params.get('id_bairro', [0])[0])
+                id_personagem = int(params.get('id_personagem', [0])[0])
+            except (ValueError, TypeError):
+                return self._render_mensagem("Erro", "Parâmetros inválidos.", "/bairros", "Voltar")
+
+            # Verifica que o personagem pertence à conta logada
+            p = PersonagemDAO().read_by_id_and_conta(id_personagem, usuario_logado['id'])
+            if not p:
+                return self._render_mensagem("Acesso negado", "Este personagem não pertence à sua conta.", f"/bairros_personagens?id={id_bairro}", "Voltar")
+
+            BairroDAO().remover_personagem(id_bairro, id_personagem)
             self._redirect(f"/bairros_personagens?id={id_bairro}")
 
         elif caminho == "/confirmar_excluir_conta":
@@ -935,11 +1007,11 @@ class Servidor(BaseHTTPRequestHandler):
             dao_bairro = BairroDAO()
             bairro = dao_bairro.read(id_bairro)
             if not bairro or not self._bairro_pertence_conta(bairro, usuario_logado['id']):
-                return self._render_mensagem("Acesso negado", "Você só pode gerenciar personagens em bairros dos seus personagens.", f"/bairros_personagens?id={id_bairro}", "Voltar")
+                return self._render_mensagem("Acesso negado", "Você só pode adicionar personagens em bairros dos seus personagens.", f"/bairros_personagens?id={id_bairro}", "Voltar")
 
-            # Só permite adicionar personagens da própria conta
-            if not PersonagemDAO().read_by_id_and_conta(id_p, usuario_logado['id']):
-                return self._render_mensagem("Acesso negado", "Você só pode adicionar personagens da sua conta.", f"/bairros_personagens?id={id_bairro}", "Voltar")
+            # Valida que o personagem existe (qualquer conta)
+            if not PersonagemDAO().read(id_p):
+                return self._render_mensagem("Personagem inválido", "Personagem não encontrado.", f"/bairros_personagens?id={id_bairro}", "Voltar")
 
             if dao_bairro.adicionar_personagem(id_bairro, id_p):
                 self._redirect(f"/bairros_personagens?id={id_bairro}")

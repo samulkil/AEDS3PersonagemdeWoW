@@ -8,9 +8,9 @@
 <div class="wow-nav">
     <a href="/bairros" class="wow-btn">Voltar aos Bairros</a>
     <a href="/personagens" class="wow-btn">Voltar aos Personagens</a>
-    
+    {% if pode_gerenciar %}
     <a href="/selecionar_personagem_bairro?id={{id_bairro}}" class="wow-btn wow-btn-success">Adicionar personagem</a>
-
+    {% endif %}
 </div>
 
 <div class="wow-card wow-card-highlight">
@@ -23,9 +23,8 @@
                 <th>Nome</th>
                 <th>Nível</th>
                 <th>Função</th>
-        
+                <th>Usuário</th>
                 <th>Ações</th>
-            
             </tr>
         </thead>
         <tbody>

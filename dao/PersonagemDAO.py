@@ -154,6 +154,20 @@ class PersonagemDAO:
                 pos = p.prox
         return True
 
+    def listar_todos_objetos(self):
+        """Retorna todos os personagens ativos de todas as contas como lista de objetos."""
+        personagens = []
+        with open(self.arquivo, "rb") as f:
+            f.seek(self.header_size)
+            while True:
+                dados = f.read(self.reg_size)
+                if len(dados) != self.reg_size:
+                    break
+                p = Personagem.from_bytes(dados)
+                if p.lapide == b' ':
+                    personagens.append(p)
+        return personagens
+
     def buscar_por_nivel(self, nivel):
         """Busca por nível utilizando a Árvore B+."""
         pos = self.arvore_nivel.buscar(int(nivel))
