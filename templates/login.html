@@ -12,10 +12,16 @@
         <form method="POST" action="/autenticar">
             <div class="wow-form-group">
                 <label class="wow-label">Nome do Herói</label>
-                <input type="text" name="usuario" class="wow-input" required 
+                <input type="text" name="usuario" class="wow-input" required
                        placeholder="Seu nome de usuário...">
             </div>
-            
+
+            <div class="wow-form-group">
+                <label class="wow-label">Senha Secreta</label>
+                <input type="password" name="senha" class="wow-input" required
+                       placeholder="Sua senha...">
+            </div>
+
             <div style="margin-top: 30px; display: flex; gap: 15px;">
                 <button type="submit" class="wow-btn" style="flex: 1;">
                      Entrar no Mundo

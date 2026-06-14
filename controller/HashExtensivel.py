@@ -1,5 +1,6 @@
 import struct
 import os
+import hashlib
 
 class HashExtensivel:
     def __init__(self, nome_arquivo, capacidade_bucket=4):
@@ -62,17 +63,22 @@ class HashExtensivel:
         fd.seek(0)
         return struct.unpack("<i", fd.read(4))[0]
 
+    def _hash_str_determinista(self, s: str) -> int:
+        """Hash determinístico para strings (MD5 truncado a 31 bits).
+        Usa hashlib para garantir o mesmo resultado entre reinicializações,
+        ao contrário do hash() nativo do Python, que muda a cada processo.
+        """
+        digest = hashlib.md5(s.encode('utf-8')).digest()
+        return int.from_bytes(digest[:4], 'little') & 0x7FFFFFFF
+
     def _hash(self, chave, profundidade):
         """Calcula o índice usando os bits menos significativos."""
         if isinstance(chave, str):
-            # Para strings, usa hash nativo e pega o módulo
-            # Usa abs para garantir positivo e limita ao range de int
-            return abs(hash(chave)) % (2 ** profundidade)
+            return self._hash_str_determinista(chave) % (2 ** profundidade)
         elif isinstance(chave, bytes):
-            # Para bytes, decodifica e usa hash
-            return abs(hash(chave.decode('utf-8'))) % (2 ** profundidade)
+            return self._hash_str_determinista(chave.decode('utf-8')) % (2 ** profundidade)
         return chave % (2 ** profundidade)
-    
+
     def _normalizar_chave(self, chave):
         """Converte a chave para formato hashável."""
         if isinstance(chave, str):
@@ -87,7 +93,7 @@ class HashExtensivel:
 
         # Normaliza a chave para busca (mesma lógica do insert)
         if isinstance(chave, str):
-            chave_busca = abs(hash(chave)) % (2**31)
+            chave_busca = self._hash_str_determinista(chave)
         else:
             chave_busca = chave
 
@@ -108,8 +114,7 @@ class HashExtensivel:
                 # Compara usando valor numérico do hash
                 chave_bucket = conteudo[i]
                 if isinstance(chave, str):
-                    # Usa a mesma transformação para comparar
-                    if abs(hash(chave)) % (2**31) == chave_bucket:
+                    if self._hash_str_determinista(chave) == chave_bucket:
                         return conteudo[i+1]
                 elif chave_bucket == chave_busca:
                     return conteudo[i+1]
@@ -117,9 +122,9 @@ class HashExtensivel:
 
     def insert(self, chave, endereco_bin):
         """Insere uma nova chave ou atualiza o endereço se a chave já existir."""
-        # Converte string para hash numérico para armazenamento
+        # Converte string para hash numérico determinístico para armazenamento
         if isinstance(chave, str):
-            chave_num = abs(hash(chave)) % (2**31)  # Limita ao range de int32
+            chave_num = self._hash_str_determinista(chave)
         else:
             chave_num = chave
             
@@ -139,7 +144,7 @@ class HashExtensivel:
             for i in range(0, qtd * 2, 2):
                 chave_bucket = conteudo[i]
                 if isinstance(chave, str):
-                    if hash(chave) == chave_bucket:
+                    if self._hash_str_determinista(chave) == chave_bucket:
                         dados[2 + i + 1] = endereco_bin 
                         fb.seek(end_bucket)
                         fb.write(struct.pack(self.fmt_bucket, *dados))
