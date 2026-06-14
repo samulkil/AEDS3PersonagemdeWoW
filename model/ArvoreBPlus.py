@@ -1,7 +1,6 @@
 import struct
 import os
 
-
 class NodeBPlus:
     def __init__(self, eh_folha=True):
         self.eh_folha = eh_folha
@@ -9,7 +8,6 @@ class NodeBPlus:
         self.ponteiros = []
         self.proximo = -1
         self.offset = None
-
 
 class ArvoreBPlus:
     def __init__(self, nome_arquivo, ordem=4):
@@ -22,8 +20,6 @@ class ArvoreBPlus:
 
         if not os.path.exists(self.nome_arquivo):
             self._inicializar()
-
-
 
     def _inicializar(self):
         with open(self.nome_arquivo, "wb") as f:
@@ -43,7 +39,6 @@ class ArvoreBPlus:
         with open(self.nome_arquivo, "rb+") as f:
             f.seek(0)
             f.write(struct.pack("<q", offset))
-
 
     def _escrever_no(self, no, f=None):
         close = False
@@ -76,8 +71,6 @@ class ArvoreBPlus:
 
         return no.offset
 
-
- 
     def _ler_no(self, offset):
         with open(self.nome_arquivo, "rb") as f:
             f.seek(offset)
@@ -102,7 +95,6 @@ class ArvoreBPlus:
 
         return no
 
-
     def buscar(self, chave):
         no = self._ler_no(self._ler_raiz())
 
@@ -117,20 +109,18 @@ class ArvoreBPlus:
                 return no.ponteiros[i]
 
         return None
-    
+
     def buscar_todos(self, chave):
         resultados = []
 
         no = self._ler_no(self._ler_raiz())
 
-        # desce até folha
         while not no.eh_folha:
             i = 0
             while i < len(no.chaves) and chave >= no.chaves[i]:
                 i += 1
             no = self._ler_no(no.ponteiros[i])
 
-        # percorre folhas
         while True:
             for i, k in enumerate(no.chaves):
                 if k == chave:
@@ -143,14 +133,12 @@ class ArvoreBPlus:
 
         return resultados
 
-  
     def inserir(self, chave, valor):
         raiz = self._ler_no(self._ler_raiz())
 
         caminho = []
         no = raiz
 
-        # desce até folha
         while not no.eh_folha:
             i = 0
             while i < len(no.chaves) and chave >= no.chaves[i]:
@@ -158,10 +146,8 @@ class ArvoreBPlus:
             caminho.append((no, i))
             no = self._ler_no(no.ponteiros[i])
 
-        # insere na folha
         self._inserir_em_folha(no, chave, valor)
 
-        # resolve splits
         self._resolver_split(no, caminho)
 
     def _inserir_em_folha(self, no, chave, valor):
@@ -172,7 +158,6 @@ class ArvoreBPlus:
         no.chaves.insert(i, chave)
         no.ponteiros.insert(i, valor)
 
-   
     def _resolver_split(self, no, caminho):
         while True:
             if len(no.chaves) <= self.max_chaves:
@@ -185,7 +170,7 @@ class ArvoreBPlus:
                 chave_subir, novo = self._split_interno(no)
 
             if not caminho:
-                # nova raiz
+
                 nova_raiz = NodeBPlus(False)
                 nova_raiz.chaves = [chave_subir]
                 nova_raiz.ponteiros = [no.offset, novo.offset]
