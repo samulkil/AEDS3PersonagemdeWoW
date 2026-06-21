@@ -126,6 +126,24 @@ class PersonagemDAO:
                     personagens.append(p)
         return personagens
 
+    def buscar_por_padrao_nome(self, padrao, algoritmo="kmp"):
+        from controller.CasamentoPadroes import kmp_buscar, boyer_moore_buscar
+        busca = boyer_moore_buscar if algoritmo == "bm" else kmp_buscar
+        padrao_norm = padrao.lower()
+        encontrados = []
+        with open(self.arquivo, "rb") as f:
+            f.seek(self.header_size)
+            while True:
+                dados = f.read(self.reg_size)
+                if len(dados) != self.reg_size:
+                    break
+                p = Personagem.from_bytes(dados)
+                if p.lapide == b' ':
+                    nome = p.nome.decode('utf-8').strip('\x00').lower()
+                    if busca(nome, padrao_norm):
+                        encontrados.append(p)
+        return encontrados
+
     def buscar_por_nivel(self, nivel):
         pos = self.arvore_nivel.buscar(int(nivel))
         if pos is not None:

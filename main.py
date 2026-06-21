@@ -267,12 +267,13 @@ def menu_personagens(id_conta_logada, nome_usuario):
         print("2. Pesquisar Personagem (Hash Extensível - ID)")
         print("3. Pesquisar Personagem (Árvore B+ - ID)")
         print("4. Pesquisar Personagem por Nível (B+)")
-        print("5. Listar MEUS Personagens (Indexado 1:N)")
-        print("6. Atualizar Personagem")
-        print("7. Excluir Personagem (Lógica)")
-        print("8. Gerenciar Grupos Temporários")
-        print("9. Gerenciar Bairros (Relacionamento N:N)")
-        print("10. Logout / Voltar")
+        print("5. Pesquisar por padrão (KMP / BM)")
+        print("6. Listar MEUS Personagens (Indexado 1:N)")
+        print("7. Atualizar Personagem")
+        print("8. Excluir Personagem (Lógica)")
+        print("9. Gerenciar Grupos Temporários")
+        print("10. Gerenciar Bairros (Relacionamento N:N)")
+        print("11. Logout / Voltar")
 
         op = input("\nEscolha uma opção: ")
 
@@ -326,12 +327,36 @@ def menu_personagens(id_conta_logada, nome_usuario):
                 print("\n[Erro] Entrada inválida.")
 
         elif op == "5":
+            print("\nAlgoritmo de casamento de padrões:")
+            print("  1. KMP (Knuth-Morris-Pratt)")
+            print("  2. Boyer-Moore")
+            escolha = input("Escolha o algoritmo: ")
+            algoritmo = "bm" if escolha == "2" else "kmp"
+            nome_alg = "Boyer-Moore" if algoritmo == "bm" else "KMP"
+            padrao = input("Digite o padrão a buscar no nome: ")
+            if not padrao:
+                print("\n[Erro] Padrão vazio.")
+            else:
+                encontrados = dao_perso.buscar_por_padrao_nome(padrao, algoritmo)
+                print(f"\n--- Resultados [{nome_alg}] para '{padrao}' ---")
+                print(f"{'ID':<5} | {'Nome':<20} | {'Nível':<10} | {'Função':<10}")
+                print("-" * 55)
+                if encontrados:
+                    for p in encontrados:
+                        n_str = p.nome.decode('utf-8').strip('\x00')
+                        f_str = p.funcao.decode('utf-8').strip('\x00')
+                        print(f"{p.id:<5} | {n_str:<20} | {p.nivel:<10.2f} | {f_str:<10}")
+                    print(f"\nTotal: {len(encontrados)} registro(s) encontrado(s).")
+                else:
+                    print("Nenhum registro encontrado para este padrão.")
+
+        elif op == "6":
             print(f"\n{'ID':<5} | {'Nome':<20} | {'Nível':<10} | {'Função':<10}")
             print("-" * 55)
 
             dao_perso.listar_por_conta(id_conta_logada)
 
-        elif op == "6":
+        elif op == "7":
             try:
                 id_up = int(input("ID do personagem para atualizar: "))
                 p_check = dao_perso.read(id_up)
@@ -353,7 +378,7 @@ def menu_personagens(id_conta_logada, nome_usuario):
             except ValueError:
                 print("\n[Erro] Entrada inválida.")
 
-        elif op == "7":
+        elif op == "8":
             try:
                 id_del = int(input("ID para excluir: "))
                 p_check = dao_perso.read(id_del)
@@ -363,13 +388,13 @@ def menu_personagens(id_conta_logada, nome_usuario):
             except ValueError:
                 print("\n[Erro] ID inválido.")
 
-        elif op == "8":
+        elif op == "9":
             menu_grupos(id_conta_logada)
 
-        elif op == "9":
+        elif op == "10":
             menu_bairros(id_conta_logada)
 
-        elif op == "10":
+        elif op == "11":
             break
 
 def menu_contas():
