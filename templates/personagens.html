@@ -15,6 +15,47 @@
 
 <div class="wow-subtitle">Aventureiro Logado: <span style="color: #f1d188;">{{usuario}}</span></div>
 
+<div class="wow-card">
+    <div class="wow-card-title">Pesquisar por padrão (KMP / BM)</div>
+    <form method="GET" action="/personagens">
+        <div class="wow-form-group">
+            <label class="wow-label">Padrão no nome</label>
+            <input type="text" name="padrao" class="wow-input" value="{{padrao}}" placeholder="Ex: art, thas, jaina...">
+        </div>
+        <div class="wow-form-group">
+            <label class="wow-label">Algoritmo</label>
+            <select name="algoritmo" class="wow-input">
+                <option value="kmp" {{kmp_selecionado}}>KMP (Knuth-Morris-Pratt)</option>
+                <option value="bm" {{bm_selecionado}}>Boyer-Moore</option>
+            </select>
+        </div>
+        <div class="wow-actions" style="justify-content: flex-start; margin-top: 15px;">
+            <button type="submit" class="wow-btn wow-btn-success">Pesquisar</button>
+            <a href="/personagens" class="wow-btn">Limpar</a>
+        </div>
+    </form>
+</div>
+
+{% if tem_busca %}
+<div class="wow-card wow-card-highlight">
+    <div class="wow-card-title">Resultados [{{nome_algoritmo}}] para "{{padrao}}"</div>
+    <table class="wow-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Nível</th>
+                <th>Função</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{resultados_busca|safe}}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 <div class="wow-card wow-card-highlight">
     <div class="wow-card-title">Seus Personagens Registrados</div>
     

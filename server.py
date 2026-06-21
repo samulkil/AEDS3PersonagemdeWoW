@@ -174,6 +174,25 @@ class Servidor(BaseHTTPRequestHandler):
                         linhas_html += f"<a href='/excluir_personagem?id={p[0]}' class='wow-link wow-link-danger' onclick='return confirm(\"Excluir?\");'>🗑️ Excluir</a></td></tr>"
         return linhas_html
 
+    def _gerar_linhas_busca_padrao(self, id_conta, padrao, algoritmo):
+        dao = PersonagemDAO()
+        encontrados = dao.buscar_por_padrao_nome(padrao, algoritmo)
+        linhas_html = ""
+        for p in encontrados:
+            if p.id_conta != id_conta:
+                continue
+            nome = p.nome.decode('utf-8').strip('\x00')
+            funcao = p.funcao.decode('utf-8').strip('\x00')
+            nome_esc = nome.replace('<', '&lt;').replace('>', '&gt;')
+            linhas_html += (
+                f"<tr><td>{p.id}</td><td>{nome_esc}</td><td>{p.nivel:.2f}</td><td>{funcao}</td>"
+                f"<td><a href='/editar_personagem?id={p.id}' class='wow-link'>✏️ Editar</a> "
+                f"<a href='/excluir_personagem?id={p.id}' class='wow-link wow-link-danger' onclick='return confirm(\"Excluir?\");'>🗑️ Excluir</a></td></tr>"
+            )
+        if not linhas_html:
+            linhas_html = "<tr><td colspan='5'>Nenhum personagem encontrado para este padrão.</td></tr>"
+        return linhas_html
+
     def _gerar_visualizacao_bplus_id(self, id_busca=None):
         """Monta uma visualização estruturada da Árvore B+ (índice por ID)."""
         try:
@@ -495,12 +514,30 @@ class Servidor(BaseHTTPRequestHandler):
 
         elif caminho == "/personagens":
             if not usuario_logado: return self._redirect("/login")
+            padrao = params.get('padrao', [''])[0].strip()
+            algoritmo = params.get('algoritmo', ['kmp'])[0]
+            if algoritmo not in ('kmp', 'bm'):
+                algoritmo = 'kmp'
+            nome_alg = 'Boyer-Moore' if algoritmo == 'bm' else 'KMP'
+            contexto = {
+                'usuario': usuario_logado['usuario'],
+                'personagens': self._gerar_linhas_personagens(usuario_logado['id']),
+                'padrao': padrao.replace('<', '&lt;').replace('>', '&gt;'),
+                'algoritmo': algoritmo,
+                'kmp_selecionado': 'selected' if algoritmo == 'kmp' else '',
+                'bm_selecionado': 'selected' if algoritmo == 'bm' else '',
+                'tem_busca': '',
+                'nome_algoritmo': nome_alg,
+                'resultados_busca': ''
+            }
+            if padrao:
+                contexto['tem_busca'] = 'true'
+                contexto['resultados_busca'] = self._gerar_linhas_busca_padrao(
+                    usuario_logado['id'], padrao, algoritmo
+                )
             self.send_response(200)
             self.end_headers()
-            html = self._render_template('personagens.html', {
-                'usuario': usuario_logado['usuario'],
-                'personagens': self._gerar_linhas_personagens(usuario_logado['id'])
-            })
+            html = self._render_template('personagens.html', contexto)
             self.wfile.write(html.encode())
 
         elif caminho == "/bairros":
